@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+codex-monitor-codex-client = { path = "../codex-client" }
 codex-monitor-protocol = { path = "../protocol" }
 hex.workspace = true
 rand.workspace = true

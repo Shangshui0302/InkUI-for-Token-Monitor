@@ -1,13 +1,18 @@
+mod http;
 mod pairing;
+mod registry;
 
+use codex_monitor_codex_client::CodexCollector;
 use codex_monitor_protocol::{
-    default_identity_path, discovery_interface_v4, pairing_message, DiscoveryAnnouncement,
-    Identity, WireMessage, ANNOUNCEMENT_TTL_SECS, ANNOUNCE_INTERVAL_SECS, DISCOVERY_GROUP_V4,
-    DISCOVERY_PORT, HANDSHAKE_TIMEOUT_SECS, HEARTBEAT_TIMEOUT_SECS, MAX_WIRE_FRAME_BYTES,
-    MONITOR_PORT, PROTOCOL_VERSION, SERVICE_NAME,
+    default_identity_path, discovery_interface_v4, pairing_message, CollectorStatus,
+    DiscoveryAnnouncement, Identity, StateSnapshot, WireMessage, ANNOUNCEMENT_TTL_SECS,
+    ANNOUNCE_INTERVAL_SECS, DISCOVERY_GROUP_V4, DISCOVERY_PORT, HANDSHAKE_TIMEOUT_SECS,
+    HEARTBEAT_TIMEOUT_SECS, MAX_WIRE_FRAME_BYTES, MONITOR_PORT, PROTOCOL_VERSION, SERVICE_NAME,
+    STATE_SNAPSHOT_CAPABILITY,
 };
 use pairing::{default_pairing_path, PairingStore};
 use rand::RngCore;
+use registry::Registry;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::env;
 use std::error::Error;
@@ -16,7 +21,7 @@ use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
-use tokio::sync::Mutex;
+use tokio::sync::{Mutex, RwLock};
 use tokio::time::timeout;
 
 type BoxError = Box<dyn Error + Send + Sync>;
@@ -28,6 +33,7 @@ async fn main() -> Result<(), BoxError> {
     let alias = env::var("CODEX_MONITOR_ALIAS").unwrap_or_else(|_| "Windows Monitor".to_string());
     let pairing_code = env::var("CODEX_MONITOR_PAIR_CODE").unwrap_or_else(|_| generate_code());
     let pairings = Arc::new(Mutex::new(PairingStore::load(default_pairing_path())?));
+    let registry = Arc::new(RwLock::new(Registry::default()));
 
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, MONITOR_PORT)).await?;
     let discovery_interface = discovery_interface_v4()?;
@@ -50,6 +56,7 @@ async fn main() -> Result<(), BoxError> {
         "sessions".to_string(),
         "control".to_string(),
         "usage".to_string(),
+        STATE_SNAPSHOT_CAPABILITY.to_string(),
     ];
     let multicast_addr = SocketAddr::from((Ipv4Addr::from(DISCOVERY_GROUP_V4), DISCOVERY_PORT));
 
@@ -58,6 +65,27 @@ async fn main() -> Result<(), BoxError> {
     eprintln!("pairing code: {pairing_code}");
     eprintln!("discovery group: {multicast_addr}");
     eprintln!("discovery interface: {discovery_interface}");
+
+    registry.write().await.register(
+        monitor_id.clone(),
+        alias.clone(),
+        capabilities.clone(),
+        unix_seconds(),
+    );
+    let http_bind = env::var("CODEX_MONITOR_HTTP_BIND")
+        .unwrap_or_else(|_| "127.0.0.1:8788".to_string())
+        .parse::<SocketAddr>()?;
+    let http_registry = Arc::clone(&registry);
+    tokio::spawn(async move {
+        if let Err(error) = http::serve(http_bind, http_registry).await {
+            eprintln!("HTTP API stopped: {error}");
+        }
+    });
+    tokio::spawn(run_local_collector(
+        Arc::clone(&registry),
+        monitor_id.clone(),
+        alias.clone(),
+    ));
 
     let announce_monitor_id = monitor_id.clone();
     let announce_alias = alias.clone();
@@ -102,6 +130,7 @@ async fn main() -> Result<(), BoxError> {
         let monitor_id = monitor_id.clone();
         let pairing_code = pairing_code.clone();
         let monitor_identity = Arc::clone(&identity);
+        let registry = Arc::clone(&registry);
         tokio::spawn(async move {
             if let Err(error) = handle_agent(
                 stream,
@@ -110,6 +139,7 @@ async fn main() -> Result<(), BoxError> {
                 &pairing_code,
                 monitor_identity,
                 pairings,
+                registry,
             )
             .await
             {
@@ -126,6 +156,7 @@ async fn handle_agent(
     pairing_code: &str,
     monitor_identity: Arc<Identity>,
     pairings: Arc<Mutex<PairingStore>>,
+    registry: Arc<RwLock<Registry>>,
 ) -> Result<(), BoxError> {
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half);
@@ -259,23 +290,122 @@ async fn handle_agent(
     )
     .await?;
     eprintln!("paired agent {alias} ({host_id}) from {peer}: {capabilities:?}");
+    let state_supported = capabilities
+        .iter()
+        .any(|value| value == STATE_SNAPSHOT_CAPABILITY);
+    registry.write().await.register(
+        host_id.clone(),
+        alias.clone(),
+        capabilities.clone(),
+        unix_seconds(),
+    );
 
-    loop {
+    let result: Result<(), BoxError> = loop {
         let message = timeout(
             Duration::from_secs(HEARTBEAT_TIMEOUT_SECS),
             read_wire(&mut reader),
         )
-        .await??;
+        .await;
+        let message = match message {
+            Ok(Ok(message)) => message,
+            Ok(Err(error)) => break Err(error),
+            Err(error) => break Err(error.into()),
+        };
         match message {
             Some(WireMessage::Heartbeat {
                 host_id: heartbeat_host_id,
             }) if heartbeat_host_id == host_id => {
-                send_wire(&mut write_half, &WireMessage::HeartbeatAck).await?;
+                registry.write().await.touch(&host_id, unix_seconds());
+                if let Err(error) = send_wire(&mut write_half, &WireMessage::HeartbeatAck).await {
+                    break Err(error);
+                }
             }
-            Some(WireMessage::Heartbeat { .. }) => return Err("heartbeat host id mismatch".into()),
+            Some(WireMessage::Heartbeat { .. }) => break Err("heartbeat host id mismatch".into()),
+            Some(WireMessage::StateSnapshot { snapshot }) if state_supported => {
+                if snapshot.host_id != host_id {
+                    break Err("state snapshot host id mismatch".into());
+                }
+                if let Err(reason) = registry
+                    .write()
+                    .await
+                    .update_snapshot(snapshot, unix_seconds())
+                {
+                    break Err(reason.into());
+                }
+            }
+            Some(WireMessage::StateSnapshot { .. }) => {
+                eprintln!("agent {host_id} sent state without negotiated capability");
+            }
             Some(other) => eprintln!("agent {host_id} sent unsupported message: {other:?}"),
-            None => return Ok(()),
+            None => break Ok(()),
         }
+    };
+    registry.write().await.disconnect(&host_id, unix_seconds());
+    result
+}
+
+async fn run_local_collector(registry: Arc<RwLock<Registry>>, host_id: String, alias: String) {
+    let mut sequence: u64 = 0;
+    loop {
+        let mut collector = match CodexCollector::spawn().await {
+            Ok(collector) => collector,
+            Err(error) => {
+                sequence = sequence.saturating_add(1);
+                update_local_snapshot(
+                    &registry,
+                    unavailable_snapshot(&host_id, &alias, sequence, &error),
+                )
+                .await;
+                tokio::time::sleep(Duration::from_secs(10)).await;
+                continue;
+            }
+        };
+
+        loop {
+            sequence = sequence.saturating_add(1);
+            let captured_at = unix_seconds();
+            match collector
+                .snapshot(&host_id, &alias, sequence, captured_at)
+                .await
+            {
+                Ok(snapshot) => {
+                    update_local_snapshot(&registry, snapshot).await;
+                    tokio::time::sleep(Duration::from_secs(10)).await;
+                }
+                Err(error) => {
+                    update_local_snapshot(
+                        &registry,
+                        unavailable_snapshot(&host_id, &alias, sequence, &error),
+                    )
+                    .await;
+                    break;
+                }
+            }
+        }
+        tokio::time::sleep(Duration::from_secs(10)).await;
+    }
+}
+
+async fn update_local_snapshot(registry: &Arc<RwLock<Registry>>, snapshot: StateSnapshot) {
+    if let Err(error) = registry
+        .write()
+        .await
+        .update_snapshot(snapshot, unix_seconds())
+    {
+        eprintln!("local state snapshot rejected: {error}");
+    }
+}
+
+fn unavailable_snapshot(host_id: &str, alias: &str, sequence: u64, error: &str) -> StateSnapshot {
+    StateSnapshot {
+        host_id: host_id.to_string(),
+        alias: alias.to_string(),
+        sequence,
+        captured_at: unix_seconds(),
+        collector_status: CollectorStatus::Unavailable,
+        error: Some(error.chars().take(256).collect()),
+        sessions: Vec::new(),
+        account: None,
     }
 }
 

@@ -5,6 +5,7 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+codex-monitor-codex-client = { path = "../codex-client" }
 codex-monitor-protocol = { path = "../protocol" }
 serde.workspace = true
 serde_json.workspace = true

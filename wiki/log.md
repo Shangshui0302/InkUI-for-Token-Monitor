@@ -27,3 +27,15 @@
 - `CODEX_MONITOR_DISCOVERY_INTERFACE` 支持按接口名或 IPv4 地址覆盖自动选择；
 - Windows 本机发现/配对，以及 NixOS↔Windows 跨主机发现、首次配对和无配对码重连已通过；
 - NixOS 防火墙通过声明式 UDP `37991` 放行，Windows 端规则限定为 Private 网络。
+
+## 2026-09-09：M2 只读状态链
+
+- 新增 `codex-monitor-codex-client`，通过本机 `codex app-server --listen stdio://` 读取
+  thread、账户、额度窗口和 usage 摘要；请求只读且关闭 token refresh；
+- `protocol` 增加 `StateSnapshot`、账户/额度/会话类型和 `state-snapshot-v1` capability；
+- Agent 仅在 Monitor 公告协商该 capability 后上报快照，Monitor 按序列号丢弃旧快照；
+- Monitor 增加内存 registry 和 loopback HTTP API：`/api/state`、`/api/hosts`、`/api/accounts`；
+- 同一账户在多台主机出现时按本地生成的分组 key 合并，额度不相加；保留 host offline/stale
+  和 collector unavailable 状态；
+- M2 已通过 NixOS 本机纵向验证和 Windows/NixOS 双主机验收；两个主机的 collector 均能返回
+  会话、计划和额度窗口，Monitor API 保留 stale/offline 状态并合并同一账户。

@@ -1,6 +1,6 @@
 # Codex Monitor 完整方案
 
-状态：`m1-in-progress`
+状态：`m2-complete`
 
 日期：2026-09-09
 
@@ -56,7 +56,8 @@ BOOX Poke3
 - turn follow-up、interrupt 等操作。
 
 本机 `codex-cli 0.151.0` 已做只读验证，以上账户和会话信息可以从本地 App Server
-取得。官方将 App Server 定位为深度 UI 集成接口，见
+取得。M2 collector 使用默认 stdio JSONL，不把 App Server 监听端口暴露到局域网。官方将
+App Server 定位为深度 UI 集成接口，见
 [Codex App Server 文档](https://developers.openai.com/codex/app-server/) 和
 [OpenAI Codex harness 说明](https://openai.com/index/unlocking-the-codex-harness/)。
 
@@ -183,6 +184,22 @@ PWA 不直接监听 UDP multicast，因此 Poke3 端使用稳定 hostname、路�
 - 运行时状态只写入各平台状态目录，私钥不进入网络消息；
 - 当前不读取 Codex、不提供 HTTP/SSE；跨主机 Windows 验收已完成，Codex 采集仍未接入。
 
+### 4.6 M2 已落地边界
+
+- `crates/codex-client`：启动本机 `codex app-server --listen stdio://`，执行只读的
+  `thread/list`、`account/read`、`account/rateLimits/read` 和 `account/usage/read`；
+- `crates/protocol`：增加受限 `StateSnapshot`，带序列号、采集时间、collector 状态和长度校验；
+- `crates/agent`：仅在 Monitor 公告声明 `state-snapshot-v1` 时上报快照；
+- `crates/monitor`：保存主机快照，保留 offline/stale 状态，按账户分组 key 去重，并提供本机
+  HTTP JSON API（默认 `127.0.0.1:8788`）；
+- 不上传原始邮箱、token、`auth.json`、完整 transcript，也不开放控制 RPC；
+- 会话列表当前取最近 25 条，`notLoaded` 映射为 `unknown`，不冒充 `idle`。
+
+当前 collector 通过独立的只读 App Server 读取持久化 thread；如果另一个 CLI/IDE 进程
+尚未把 thread 加载到该 App Server，官方返回的运行时状态会是 `notLoaded`，页面显示
+`unknown`。这避免把“无法确认”误报成空闲；共享 daemon/control-socket 的实时状态接入
+留到后续 M2.x。
+
 ## 5. Codex 数据流
 
 Agent 负责本地凭据边界，Monitor 只接收必要的已筛选数据。
@@ -210,13 +227,16 @@ Agent 负责本地凭据边界，Monitor 只接收必要的已筛选数据。
 
 ## 6. API 设计草案
 
-### 浏览器 API
+### 浏览器 API（M2 已实现只读部分）
 
 ```text
 GET  /api/state
-GET  /api/events                 # SSE 状态流
 GET  /api/hosts
 GET  /api/accounts
+```
+
+```text
+GET  /api/events                 # M3/PWA 阶段再加入 SSE
 POST /api/hosts/:host/threads/:thread/turn
 POST /api/hosts/:host/threads/:thread/interrupt
 POST /api/hosts/:host/threads/:thread/stop

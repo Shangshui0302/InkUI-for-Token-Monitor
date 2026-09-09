@@ -2,7 +2,7 @@
 
 面向两台开发主机和 BOOX Poke3 的 Codex 会话、账户额度监控台。
 
-当前状态：M1 发现、身份和配对原型已启动；Codex 数据采集和网页 API 尚未接入。
+当前状态：M2 只读 Codex collector 和状态 API 已接入；Poke3 页面与会话控制仍待后续阶段。
 
 ## 目标拓扑
 
@@ -48,6 +48,12 @@ CODEX_MONITOR_PAIR_CODE=246810 cargo run -p codex-monitor-agent
 也可用 `CODEX_MONITOR_DISCOVERY_INTERFACE` 指定接口名或 IPv4 地址。Agent 首次配对后会 pin Monitor 公钥；若
 Monitor 身份被重置，删除 trusted-monitor 文件后再配对。
 
+Monitor 的只读状态 API 默认只监听本机 `127.0.0.1:8788`，可用
+`CODEX_MONITOR_HTTP_BIND` 覆盖。API 包含 `/api/state`、`/api/hosts` 和
+`/api/accounts`。每台主机本地启动 `codex app-server`，只上传经过筛选的会话和账户状态；
+不会上传 token 或 `auth.json`。当前会话列表取最近 25 条，额度窗口按 App Server 返回的
+`usedPercent`、`windowDurationMins` 和 `resetsAt` 展示。
+
 NixOS 是主开发环境。Windows 10 负责运行 Monitor 和本机 Agent；Android 端首版
 使用可安装 PWA，必要时再增加薄 APK 外壳。
 
@@ -57,5 +63,5 @@ NixOS 是主开发环境。Windows 10 负责运行 Monitor 和本机 Agent；And
 - 不把 Codex App Server 直接暴露到局域网；
 - 首版不做任意 shell、文件操作或自动审批；
 - M1 已验证 discovery、Ed25519 challenge-response、heartbeat、重连骨架和跨主机 Windows 防火墙；
-- HTTP/SSE、Codex App Server collector 和 Poke3 页面待后续阶段；
+- M2 已接入 HTTP 状态 API 和 Codex App Server collector；SSE、Poke3 页面和控制命令待后续阶段；
 - 尚未决定项目开源许可证，暂记为 TBD。

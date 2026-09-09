@@ -22,15 +22,18 @@
 当前验收：本机 multicast、Windows 本机和 NixOS↔Windows 跨主机发现/配对/重连已通过；
 DHCP/网络重启后的持续重连、hostname/URL 兜底仍待实现。
 
-## M2：Codex 只读监控
+## M2：Codex 只读监控（已完成）
 
-- thread/session 列表；
-- active、idle、waiting、error；
-- 最近输出摘要；
-- 账户计划和 5 小时/周额度；
-- credits、last-seen、stale 状态。
+- 已增加本地 `codex app-server` stdio JSONL collector；
+- 已增加 thread/session 列表和状态归一化；
+- 已增加账户计划、额度窗口、credits 和 usage 摘要；
+- 已增加 Monitor 内存 registry、stale/offline 和同账户去重；
+- 已增加 `/api/state`、`/api/hosts`、`/api/accounts`；
+- 已完成 Windows/NixOS 实机验收和基本错误/断线矩阵；
+- SSE 状态流留到 PWA 接入时处理。
 
-验收：Windows 和 NixOS 同时显示在一张监控页。
+验收已通过：Windows 和 NixOS 的状态通过同一个 Monitor API 返回，并能区分主机离线、
+collector 不可用和有效的空会话；同一账户在两个主机上只显示一张聚合卡片。
 
 ## M3：Poke3 PWA
 
