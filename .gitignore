@@ -1,0 +1,13 @@
+/target/
+/result
+/result-*/
+.direnv/
+
+# Local runtime state and credentials
+.codex-monitor/
+*.local.json
+*.secret
+
+# Editor and OS noise
+.DS_Store
+*.swp

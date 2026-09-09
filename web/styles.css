@@ -1,0 +1,38 @@
+:root {
+  color-scheme: light;
+  font-family: system-ui, sans-serif;
+  background: #f4f4f0;
+  color: #111;
+}
+
+body {
+  margin: 0;
+}
+
+.shell {
+  box-sizing: border-box;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.eyebrow {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+}
+
+h1 {
+  margin: 0.25rem 0 1.5rem;
+  font-size: 2rem;
+}
+
+.card {
+  border: 2px solid #111;
+  background: #fff;
+  padding: 1rem;
+}
+
+.card h2 {
+  margin-top: 0;
+}

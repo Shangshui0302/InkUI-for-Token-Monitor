@@ -1,0 +1,9 @@
+{
+  "name": "Codex Monitor",
+  "short_name": "Codex Monitor",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f4f0",
+  "theme_color": "#111111",
+  "icons": []
+}
