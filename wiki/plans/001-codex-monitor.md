@@ -1,6 +1,6 @@
 # Codex Monitor 完整方案
 
-状态：`m2-complete`
+状态：`m3.1-in-progress`
 
 日期：2026-09-09
 
@@ -200,6 +200,25 @@ PWA 不直接监听 UDP multicast，因此 Poke3 端使用稳定 hostname、路�
 `unknown`。这避免把“无法确认”误报成空闲；共享 daemon/control-socket 的实时状态接入
 留到后续 M2.x。
 
+### 4.7 M3 Poke3 PWA 边界
+
+- `web/` 使用原生 HTML/CSS/JS，不引入前端构建依赖；页面按 15 秒间隔轮询
+  `/api/state`，保留手动刷新和明确的断线提示；
+- Monitor 将页面和 Service Worker 静态资源编译进服务器二进制，`/`、`/app.js`、
+  `/styles.css`、`/manifest.webmanifest` 和 `/sw.js` 与 JSON API 共用端口；
+- Service Worker 只缓存静态壳，所有 `/api/*` 请求直连网络，离线时仅恢复页面壳并显示状态
+  可能过期；
+- 布局采用黑白高对比、大字号和无动画设计，使用“总览 / 额度 / 活动 / 会话”按钮切换，
+  主机、账户和会话使用分页以减少小屏滚动；
+- 额度页将 primary/secondary 标为“五小时限制”和“一周限制”，隐藏原始窗口分钟数；
+- 活动页读取 `account/usage/read` 的 `dailyUsageBuckets`，以最近 14 天的日历热力图显示
+  每日 token，并保留日期与 token 文本，未返回的更早历史不补造；
+- HTTP 默认仍绑定 loopback；LAN 绑定需要用户显式设置并配合 Windows Private 防火墙，M3
+  不提供认证或写操作。
+
+M3.1 验证分为桌面静态路由/API 烟测、热力图数据解析测试和 Poke3 实机手工验收。SSE、会话控制、历史数据库和
+Poke3 自动发现继续留在后续阶段。
+
 ## 5. Codex 数据流
 
 Agent 负责本地凭据边界，Monitor 只接收必要的已筛选数据。
@@ -220,6 +239,7 @@ Agent 负责本地凭据边界，Monitor 只接收必要的已筛选数据。
 - `windowDurationMins`；
 - `resetsAt`；
 - credits；
+- `dailyUsageBuckets`（日期和 token，用于活动热力图）；
 - `lastUpdated` 和 stale/error 状态。
 
 同一个账户在两台主机登录时，Monitor 按账户身份合并为一张卡片，不将两个
@@ -227,9 +247,14 @@ Agent 负责本地凭据边界，Monitor 只接收必要的已筛选数据。
 
 ## 6. API 设计草案
 
-### 浏览器 API（M2 已实现只读部分）
+### 浏览器 API（M2/M3 已实现只读部分）
 
 ```text
+GET  /                         # Poke3 PWA
+GET  /app.js
+GET  /styles.css
+GET  /manifest.webmanifest
+GET  /sw.js
 GET  /api/state
 GET  /api/hosts
 GET  /api/accounts

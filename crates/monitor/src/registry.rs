@@ -235,6 +235,7 @@ mod tests {
                 reset_credits_available: None,
                 usage_lifetime_tokens: None,
                 usage_peak_daily_tokens: None,
+                daily_usage: Vec::new(),
                 observed_at: sequence,
             }),
         }

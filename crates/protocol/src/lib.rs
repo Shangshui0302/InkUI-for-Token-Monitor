@@ -22,8 +22,10 @@ pub const MAX_WIRE_FRAME_BYTES: usize = 64 * 1024;
 pub const STATE_SNAPSHOT_CAPABILITY: &str = "state-snapshot-v1";
 pub const MAX_STATE_SESSIONS: usize = 128;
 pub const MAX_STATE_BUCKETS: usize = 32;
+pub const MAX_STATE_DAILY_USAGE: usize = 400;
 pub const MAX_STATE_ID_BYTES: usize = 128;
 pub const MAX_STATE_TEXT_BYTES: usize = 1024;
+pub const MAX_STATE_DATE_BYTES: usize = 10;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
@@ -64,6 +66,13 @@ pub struct RateLimitBucket {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
+pub struct DailyUsageBucket {
+    pub start_date: String,
+    pub tokens: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct AccountState {
     /// A stable, non-secret grouping key. Raw account identifiers never leave the host.
     pub account_key: Option<String>,
@@ -74,6 +83,8 @@ pub struct AccountState {
     pub reset_credits_available: Option<u64>,
     pub usage_lifetime_tokens: Option<u64>,
     pub usage_peak_daily_tokens: Option<u64>,
+    #[serde(default)]
+    pub daily_usage: Vec<DailyUsageBucket>,
     pub observed_at: u64,
 }
 
@@ -182,9 +193,36 @@ impl StateSnapshot {
                     }
                 }
             }
+            if account.daily_usage.len() > MAX_STATE_DAILY_USAGE {
+                return Err("too many daily usage buckets");
+            }
+            for bucket in &account.daily_usage {
+                if !valid_date(&bucket.start_date) {
+                    return Err("invalid daily usage date");
+                }
+            }
         }
         Ok(())
     }
+}
+
+fn valid_date(value: &str) -> bool {
+    if value.len() != MAX_STATE_DATE_BYTES {
+        return false;
+    }
+    let bytes = value.as_bytes();
+    bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| matches!(index, 4 | 7) || byte.is_ascii_digit())
+        && value[5..7]
+            .parse::<u8>()
+            .is_ok_and(|month| (1..=12).contains(&month))
+        && value[8..10]
+            .parse::<u8>()
+            .is_ok_and(|day| (1..=31).contains(&day))
 }
 
 /// Public discovery data. Credentials and Codex account data never belong here.

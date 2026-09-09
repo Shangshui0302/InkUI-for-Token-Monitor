@@ -4,21 +4,65 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="theme-color" content="#111111">
+    <meta name="description" content="Codex 会话和账户额度监控台">
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="stylesheet" href="/styles.css">
     <title>Codex Monitor</title>
   </head>
   <body>
     <main class="shell">
-      <header>
-        <p class="eyebrow">CODEX MONITOR</p>
-        <h1>监控台</h1>
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">CODEX MONITOR</p>
+          <h1>监控台</h1>
+        </div>
+        <button id="refresh" class="refresh" type="button">立即刷新</button>
       </header>
-      <section class="card" aria-live="polite">
-        <h2>尚未连接</h2>
-        <p>Monitor 服务骨架已创建，状态流将在后续阶段接入。</p>
+
+      <section class="connection card" aria-live="polite">
+        <div>
+          <h2 id="connection-status">连接中</h2>
+          <p id="last-updated">正在读取 Monitor 状态…</p>
+        </div>
+        <p id="revision" class="revision"></p>
+      </section>
+
+      <nav class="view-nav" aria-label="监控页面" role="tablist">
+        <button class="view-tab is-active" type="button" role="tab" aria-selected="true" data-view="overview">总览</button>
+        <button class="view-tab" type="button" role="tab" aria-selected="false" data-view="accounts">额度</button>
+        <button class="view-tab" type="button" role="tab" aria-selected="false" data-view="activity">活动</button>
+        <button class="view-tab" type="button" role="tab" aria-selected="false" data-view="sessions">会话</button>
+      </nav>
+
+      <section id="view-overview" class="view is-active" role="tabpanel">
+        <div id="overview"></div>
+      </section>
+
+      <section id="view-accounts" class="view" role="tabpanel" hidden>
+        <div class="section-heading">
+          <h2>账户额度</h2>
+          <span id="account-count" class="count">0</span>
+        </div>
+        <div id="accounts" class="stack">
+          <p class="empty">正在读取账户…</p>
+        </div>
+      </section>
+
+      <section id="view-activity" class="view" role="tabpanel" hidden>
+        <div id="activity"></div>
+      </section>
+
+      <section id="view-sessions" class="view" role="tabpanel" hidden>
+        <div class="section-heading">
+          <h2>开发主机与会话</h2>
+          <span id="host-count" class="count">0</span>
+        </div>
+        <div id="hosts" class="stack">
+          <p class="empty">正在读取主机…</p>
+        </div>
       </section>
     </main>
+    <noscript>需要启用 JavaScript 才能读取 Monitor 状态。</noscript>
     <script type="module" src="/app.js"></script>
   </body>
 </html>

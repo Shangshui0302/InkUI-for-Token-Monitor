@@ -1,8 +1,12 @@
 {
   "name": "Codex Monitor",
   "short_name": "Codex Monitor",
+  "lang": "zh-CN",
+  "description": "Codex 会话和账户额度监控台",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f4f4f0",
   "theme_color": "#111111",
   "icons": []

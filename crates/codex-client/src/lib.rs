@@ -1,6 +1,6 @@
 use codex_monitor_protocol::{
-    AccountState, CollectorStatus, CreditBalance, RateLimitBucket, RateLimitWindow, SessionState,
-    StateSnapshot,
+    AccountState, CollectorStatus, CreditBalance, DailyUsageBucket, RateLimitBucket,
+    RateLimitWindow, SessionState, StateSnapshot, MAX_STATE_DAILY_USAGE,
 };
 use serde_json::{json, Map, Value};
 use std::env;
@@ -334,6 +334,7 @@ fn merge_account(
         .map(parse_rate_limits)
         .unwrap_or_default();
     let usage_summary = usage_result.and_then(|value| value.get("summary"));
+    let daily_usage = usage_result.map(parse_daily_usage).unwrap_or_default();
     let account_key = account_value.and_then(account_group_key);
     let auth_mode = account_value
         .and_then(|value| value.get("type"))
@@ -353,6 +354,7 @@ fn merge_account(
         && !requires_openai_auth
         && rate_limits.is_empty()
         && usage_summary.is_none()
+        && daily_usage.is_empty()
     {
         return None;
     }
@@ -366,8 +368,54 @@ fn merge_account(
         usage_lifetime_tokens: usage_summary.and_then(|value| number(value.get("lifetimeTokens"))),
         usage_peak_daily_tokens: usage_summary
             .and_then(|value| number(value.get("peakDailyTokens"))),
+        daily_usage,
         observed_at,
     })
+}
+
+fn parse_daily_usage(result: &Value) -> Vec<DailyUsageBucket> {
+    let mut buckets = result
+        .get("dailyUsageBuckets")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|item| {
+            let start_date = item.get("startDate").and_then(Value::as_str)?;
+            if !valid_date(start_date) {
+                return None;
+            }
+            let tokens = item.get("tokens").and_then(Value::as_u64)?;
+            Some(DailyUsageBucket {
+                start_date: start_date.to_string(),
+                tokens,
+            })
+        })
+        .collect::<Vec<_>>();
+    buckets.sort_by(|left, right| left.start_date.cmp(&right.start_date));
+    buckets.dedup_by(|left, right| left.start_date == right.start_date);
+    if buckets.len() > MAX_STATE_DAILY_USAGE {
+        buckets = buckets.split_off(buckets.len() - MAX_STATE_DAILY_USAGE);
+    }
+    buckets
+}
+
+fn valid_date(value: &str) -> bool {
+    if value.len() != 10 {
+        return false;
+    }
+    let bytes = value.as_bytes();
+    bytes[4] == b'-'
+        && bytes[7] == b'-'
+        && bytes
+            .iter()
+            .enumerate()
+            .all(|(index, byte)| matches!(index, 4 | 7) || byte.is_ascii_digit())
+        && value[5..7]
+            .parse::<u8>()
+            .is_ok_and(|month| (1..=12).contains(&month))
+        && value[8..10]
+            .parse::<u8>()
+            .is_ok_and(|day| (1..=31).contains(&day))
 }
 
 fn parse_rate_limits(result: &Value) -> (Vec<RateLimitBucket>, Option<u64>) {
@@ -538,5 +586,31 @@ mod tests {
         let account = json!({"type": "chatgpt", "email": "user@example.com"});
         let key = account_group_key(&account).expect("account key");
         assert!(!key.contains("user@example.com"));
+    }
+
+    #[test]
+    fn parses_bounded_daily_usage_buckets() {
+        let result = json!({
+            "dailyUsageBuckets": [
+                {"startDate": "2026-09-03", "tokens": 30},
+                {"startDate": "bad-date", "tokens": 99},
+                {"startDate": "2026-09-01", "tokens": 10},
+                {"startDate": "2026-09-03", "tokens": 40},
+                {"startDate": "2026-09-02", "tokens": -1}
+            ]
+        });
+        assert_eq!(
+            parse_daily_usage(&result),
+            vec![
+                DailyUsageBucket {
+                    start_date: "2026-09-01".to_string(),
+                    tokens: 10,
+                },
+                DailyUsageBucket {
+                    start_date: "2026-09-03".to_string(),
+                    tokens: 30,
+                }
+            ]
+        );
     }
 }

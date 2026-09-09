@@ -39,3 +39,21 @@
   和 collector unavailable 状态；
 - M2 已通过 NixOS 本机纵向验证和 Windows/NixOS 双主机验收；两个主机的 collector 均能返回
   会话、计划和额度窗口，Monitor API 保留 stale/offline 状态并合并同一账户。
+
+## 2026-09-09：M3 Poke3 PWA
+
+- Poke3 首版采用原生 HTML/CSS/JS 和同端口静态资源，不引入 React/Vue 或 Node 构建链；
+- 页面每 15 秒轮询 `/api/state`，保留手动刷新和断线/过期提示；SSE 延后到确有功耗或
+  延迟需求时再加入；
+- Service Worker 只缓存静态壳，`/api/*` 永不缓存，避免额度和会话显示旧数据；
+- Monitor 默认继续 loopback，用户显式 LAN 绑定时需使用可信 Private 网络；M3 不开放写入或
+  未认证控制接口。
+
+## 2026-09-09：M3.1 小屏活动视图
+
+- `account/usage/read` 的 `dailyUsageBuckets` 已进入受限 `AccountState`，只接受严格日期和
+  非负 token，并限制最多 400 个 bucket；不使用日用量反推五小时/一周额度；
+- Poke3 页面改为“总览 / 额度 / 活动 / 会话”按钮切换，账户、主机和会话使用分页；
+- 额度窗口显示为“五小时限制”和“一周限制”，隐藏 `windowDurationMins` 文本；
+- 活动页默认显示最近 14 天热力图，具体日期和 token 同时显示；App Server 未返回的历史不
+  伪造，持久化历史留到后续阶段。
