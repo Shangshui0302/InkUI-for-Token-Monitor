@@ -1,16 +1,17 @@
 mod pairing;
 
 use codex_monitor_protocol::{
-    default_identity_path, pairing_message, DiscoveryAnnouncement, Identity, WireMessage,
-    ANNOUNCEMENT_TTL_SECS, ANNOUNCE_INTERVAL_SECS, DISCOVERY_GROUP_V4, DISCOVERY_PORT,
-    HANDSHAKE_TIMEOUT_SECS, HEARTBEAT_TIMEOUT_SECS, MAX_WIRE_FRAME_BYTES, MONITOR_PORT,
-    PROTOCOL_VERSION, SERVICE_NAME,
+    default_identity_path, discovery_interface_v4, pairing_message, DiscoveryAnnouncement,
+    Identity, WireMessage, ANNOUNCEMENT_TTL_SECS, ANNOUNCE_INTERVAL_SECS, DISCOVERY_GROUP_V4,
+    DISCOVERY_PORT, HANDSHAKE_TIMEOUT_SECS, HEARTBEAT_TIMEOUT_SECS, MAX_WIRE_FRAME_BYTES,
+    MONITOR_PORT, PROTOCOL_VERSION, SERVICE_NAME,
 };
 use pairing::{default_pairing_path, PairingStore};
 use rand::RngCore;
+use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::env;
 use std::error::Error;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr, UdpSocket as StdUdpSocket};
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
@@ -29,11 +30,20 @@ async fn main() -> Result<(), BoxError> {
     let pairings = Arc::new(Mutex::new(PairingStore::load(default_pairing_path())?));
 
     let listener = TcpListener::bind((Ipv4Addr::UNSPECIFIED, MONITOR_PORT)).await?;
-    let announcement_socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, 0)).await?;
+    let discovery_interface = discovery_interface_v4()?;
+    let announcement_socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
+    announcement_socket.bind(&SockAddr::from(SocketAddr::from((
+        Ipv4Addr::UNSPECIFIED,
+        0,
+    ))))?;
+    announcement_socket.set_multicast_if_v4(&discovery_interface)?;
     announcement_socket.set_multicast_ttl_v4(1)?;
     // Keep loopback enabled so a Monitor-local Agent (the Windows host's own
     // collector) can use the same discovery path as remote Agents.
     announcement_socket.set_multicast_loop_v4(true)?;
+    let announcement_socket: StdUdpSocket = announcement_socket.into();
+    announcement_socket.set_nonblocking(true)?;
+    let announcement_socket = UdpSocket::from_std(announcement_socket)?;
 
     let monitor_public_key = identity.public_key_hex();
     let capabilities = vec![
@@ -47,6 +57,7 @@ async fn main() -> Result<(), BoxError> {
     eprintln!("monitor public key: {monitor_public_key}");
     eprintln!("pairing code: {pairing_code}");
     eprintln!("discovery group: {multicast_addr}");
+    eprintln!("discovery interface: {discovery_interface}");
 
     let announce_monitor_id = monitor_id.clone();
     let announce_alias = alias.clone();

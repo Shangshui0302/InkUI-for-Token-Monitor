@@ -94,12 +94,15 @@ pub fn default_identity_path(role: &str) -> PathBuf {
     root.join("codex-monitor").join(format!("{role}.identity"))
 }
 
+#[cfg(unix)]
 fn set_private_permissions(path: &Path) -> io::Result<()> {
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
-    }
+    use std::os::unix::fs::PermissionsExt;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o600))?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn set_private_permissions(_path: &Path) -> io::Result<()> {
     Ok(())
 }
 

@@ -181,7 +181,7 @@ PWA 不直接监听 UDP multicast，因此 Poke3 端使用稳定 hostname、路�
 - `crates/monitor`：UDP 公告、TCP 握手、首次配对码、公钥持久化、heartbeat 超时；
 - `crates/agent`：监听公告、动态地址连接、challenge-response、Monitor 公钥 pin、heartbeat 和指数退避；
 - 运行时状态只写入各平台状态目录，私钥不进入网络消息；
-- 当前不读取 Codex、不提供 HTTP/SSE，也不声明已完成跨主机 Windows 验收。
+- 当前不读取 Codex、不提供 HTTP/SSE；跨主机 Windows 验收已完成，Codex 采集仍未接入。
 
 ## 5. Codex 数据流
 
@@ -342,7 +342,8 @@ codex-monitor-UI/
 
 已交付 multicast announce、稳定 host ID、首次配对、challenge-response、heartbeat 和自动重连原型。
 
-本机 multicast 联调通过；改变 DHCP 租约、重启网络和 Windows 防火墙矩阵待收尾验证。
+本机 multicast、Windows 本机和 NixOS↔Windows 跨主机发现/配对/无配对码重连已通过；
+改变 DHCP 租约、重启网络的持续重连，以及 hostname/URL 兜底仍待验证。
 
 当前验证证据：`cargo fmt --check`、`cargo clippy --workspace --all-targets -- -D warnings`、
 `cargo test --workspace`、PWA 语法检查和 `nix flake check path:. --no-build` 均通过；

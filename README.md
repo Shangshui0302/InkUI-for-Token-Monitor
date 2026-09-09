@@ -44,7 +44,8 @@ CODEX_MONITOR_PAIR_CODE=246810 cargo run -p codex-monitor-agent
 
 身份和配对文件默认写入各平台状态目录，也可用
 `CODEX_MONITOR_IDENTITY_PATH`、`CODEX_MONITOR_PAIRING_PATH`、
-`CODEX_MONITOR_TRUST_PATH` 覆盖测试路径。Agent 首次配对后会 pin Monitor 公钥；若
+`CODEX_MONITOR_TRUST_PATH` 覆盖测试路径。发现会自动选择可用的真实 LAN IPv4 接口，
+也可用 `CODEX_MONITOR_DISCOVERY_INTERFACE` 指定接口名或 IPv4 地址。Agent 首次配对后会 pin Monitor 公钥；若
 Monitor 身份被重置，删除 trusted-monitor 文件后再配对。
 
 NixOS 是主开发环境。Windows 10 负责运行 Monitor 和本机 Agent；Android 端首版
@@ -55,6 +56,6 @@ NixOS 是主开发环境。Windows 10 负责运行 Monitor 和本机 Agent；And
 - 不复制 `~/.codex/auth.json` 到 Monitor 或 BOOX；
 - 不把 Codex App Server 直接暴露到局域网；
 - 首版不做任意 shell、文件操作或自动审批；
-- M1 目前只验证 discovery、Ed25519 challenge-response、heartbeat 和重连骨架；
-- HTTP/SSE、Codex App Server collector、Poke3 页面和跨主机 Windows 防火墙验证待后续阶段；
+- M1 已验证 discovery、Ed25519 challenge-response、heartbeat、重连骨架和跨主机 Windows 防火墙；
+- HTTP/SSE、Codex App Server collector 和 Poke3 页面待后续阶段；
 - 尚未决定项目开源许可证，暂记为 TBD。

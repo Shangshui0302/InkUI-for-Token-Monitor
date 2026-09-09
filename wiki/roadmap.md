@@ -15,9 +15,12 @@
 - 已实现持久 Ed25519 `host_id`、公钥指纹和身份文件；
 - 已实现首次配对码 + challenge-response，并在 Monitor 保存 Agent 公钥、在 Agent pin Monitor 公钥；
 - 已实现 heartbeat、超时和指数退避重连；
+- 已实现跨平台 LAN 接口选择，避开 Mihomo/TUN 等虚拟接口；可用
+  `CODEX_MONITOR_DISCOVERY_INTERFACE` 做诊断覆盖；
 - 待验证 DHCP/网络重启后的跨主机重连；hostname/URL 兜底仍待实现。
 
-当前验收：本机 multicast 联调通过；跨主机租约变化和 Windows 防火墙验收待 M1 收尾。
+当前验收：本机 multicast、Windows 本机和 NixOS↔Windows 跨主机发现/配对/重连已通过；
+DHCP/网络重启后的持续重连、hostname/URL 兜底仍待实现。
 
 ## M2：Codex 只读监控
 

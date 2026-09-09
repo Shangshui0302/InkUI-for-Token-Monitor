@@ -1,8 +1,10 @@
 //! Shared discovery, pairing, and control-link types.
 
 mod identity;
+mod network;
 
 pub use identity::{default_identity_path, pairing_message, Identity};
+pub use network::discovery_interface_v4;
 
 use serde::{Deserialize, Serialize};
 

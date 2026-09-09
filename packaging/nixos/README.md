@@ -8,3 +8,6 @@
 
 实现阶段再根据锁定的 nixpkgs 接口添加 derivation，不在初始化阶段猜测运行时
 依赖或自动执行 `nixos-rebuild switch`。
+
+Agent 需要接收 Monitor 的 LAN 发现公告；启用 NixOS 防火墙时，模块应声明放行 UDP
+`37991`（TCP `8787` 为 Agent 的出站连接，不需要入站端口）。

@@ -1,13 +1,13 @@
 mod trust;
 
 use codex_monitor_protocol::{
-    default_identity_path, pairing_message, DiscoveryAnnouncement, Identity, WireMessage,
-    DISCOVERY_GROUP_V4, DISCOVERY_PORT, HANDSHAKE_TIMEOUT_SECS, HEARTBEAT_INTERVAL_SECS,
-    PROTOCOL_VERSION, SERVICE_NAME,
+    default_identity_path, discovery_interface_v4, pairing_message, DiscoveryAnnouncement,
+    Identity, WireMessage, DISCOVERY_GROUP_V4, DISCOVERY_PORT, HANDSHAKE_TIMEOUT_SECS,
+    HEARTBEAT_INTERVAL_SECS, PROTOCOL_VERSION, SERVICE_NAME,
 };
 use std::env;
 use std::error::Error;
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::{Ipv4Addr, SocketAddr, UdpSocket as StdUdpSocket};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::net::{TcpStream, UdpSocket};
@@ -31,11 +31,14 @@ async fn main() -> Result<(), BoxError> {
         eprintln!("CODEX_MONITOR_PAIR_CODE is unset; only a previously paired host can connect");
     }
 
-    let socket = UdpSocket::bind((Ipv4Addr::UNSPECIFIED, DISCOVERY_PORT)).await?;
-    socket.join_multicast_v4(Ipv4Addr::from(DISCOVERY_GROUP_V4), Ipv4Addr::UNSPECIFIED)?;
+    let discovery_interface = discovery_interface_v4()?;
+    let socket = StdUdpSocket::bind((Ipv4Addr::UNSPECIFIED, DISCOVERY_PORT))?;
+    socket.set_nonblocking(true)?;
+    socket.join_multicast_v4(&Ipv4Addr::from(DISCOVERY_GROUP_V4), &discovery_interface)?;
+    let socket = UdpSocket::from_std(socket)?;
     eprintln!(
-        "listening for {SERVICE_NAME} announcements on 239.255.77.77:{}",
-        DISCOVERY_PORT
+        "listening for {SERVICE_NAME} announcements on 239.255.77.77:{} via {discovery_interface}",
+        DISCOVERY_PORT,
     );
 
     let mut buffer = [0u8; 16 * 1024];
