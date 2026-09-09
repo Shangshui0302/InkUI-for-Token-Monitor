@@ -10,3 +10,11 @@
 - 主开发环境选择 NixOS 宿主机，通过项目 flake 提供 Rust 工具链；
 - 首版不复制 `auth.json`、不暴露任意 shell、不自动审批；
 - 许可证、是否需要 APK、Windows Service 形式仍为 `TBD`。
+
+## 2026-09-09：开启 M1
+
+- `main` 已从 bootstrap 分支快进到提交 `593de79`；M1 在独立分支 `codex/m1-discovery` 开发；
+- M1 传输先采用换行分隔 JSON over TCP，保留后续切换 WebSocket 的 payload 兼容边界；
+- Monitor 广播 `239.255.77.77:37991`，控制链路监听 TCP `8787`；公告每 5 秒刷新、20 秒过期；
+- Agent 使用出站连接，首次用配对码，之后用双方持久化的公钥；Agent 会 pin Monitor 身份，heartbeat 超时后重新发现；
+- 本机联调已验证发现、配对和 heartbeat；跨主机 DHCP/Windows 防火墙验证留在 M1 收尾。

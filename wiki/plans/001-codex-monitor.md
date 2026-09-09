@@ -1,6 +1,6 @@
 # Codex Monitor 完整方案
 
-状态：`approved-for-bootstrap`
+状态：`m1-in-progress`
 
 日期：2026-09-09
 
@@ -98,7 +98,7 @@ Poke3 是 Android 10、6 英寸、300dpi、2GB RAM 设备，适合大字号、�
 │  local Codex collector                                         │
 │   └─ codex app-server --listen stdio://                        │
 └───────────────────────────▲────────────────────────────────────┘
-                            │ outbound WebSocket/HTTPS
+                            │ outbound control link
                             │ dynamic IP independent
 ┌───────────────────────────┴────────────────────────────────────┐
 │ NixOS Agent Host                                                │
@@ -146,9 +146,9 @@ NixOS Agent：
 
 1. 启动时加载本地稳定 `host_id` 和密钥；
 2. 监听 Monitor 广播；
-3. 首次连接用一次性配对码确认；
+3. 首次连接用 Monitor 显示的配对码确认；
 4. 之后以公钥/host ID 重新连接；
-5. 建立出站 WebSocket/HTTPS 长连接；
+5. 建立出站控制长连接（M1 为换行分隔 JSON over TCP，M2 再升级为 WebSocket/HTTPS）；
 6. 断线后指数退避并重新发现；
 7. IP 改变不影响配对关系。
 
@@ -174,6 +174,14 @@ PWA 不直接监听 UDP multicast，因此 Poke3 端使用稳定 hostname、路�
 4. 手工输入当前地址。
 
 不把全网 IP 扫描作为首选方案，避免慢、误报和防火墙噪声。
+
+### 4.5 M1 已落地边界
+
+- `crates/protocol`：公告和控制链路消息、长度/TTL/身份校验、Ed25519 身份和签名；
+- `crates/monitor`：UDP 公告、TCP 握手、首次配对码、公钥持久化、heartbeat 超时；
+- `crates/agent`：监听公告、动态地址连接、challenge-response、Monitor 公钥 pin、heartbeat 和指数退避；
+- 运行时状态只写入各平台状态目录，私钥不进入网络消息；
+- 当前不读取 Codex、不提供 HTTP/SSE，也不声明已完成跨主机 Windows 验收。
 
 ## 5. Codex 数据流
 
@@ -221,7 +229,7 @@ POST /api/hosts/:host/threads/:thread/rename
 ```text
 AgentHello
 PairChallenge
-PairAccept
+PairAccepted
 Heartbeat
 StateSnapshot
 StateEvent
@@ -293,7 +301,8 @@ codex-monitor-UI/
 
 - Linux：`$XDG_STATE_HOME/codex-monitor/`；
 - Windows：`%LOCALAPPDATA%\\CodexMonitor\\`；
-- 凭据和配对私钥只留在各自主机。
+- Monitor 保存 Agent 公钥，Agent 保存已信任的 Monitor 公钥；
+- 凭据和身份私钥只留在各自主机。
 
 ## 9. 平台交付
 
@@ -329,11 +338,15 @@ codex-monitor-UI/
 
 验收：`cargo check --workspace`、协议 JSON round-trip 测试通过。
 
-### M1：发现和配对
+### M1：发现和配对（进行中）
 
-交付 multicast announce、稳定 host ID、一次性配对、自动重连。
+已交付 multicast announce、稳定 host ID、首次配对、challenge-response、heartbeat 和自动重连原型。
 
-验收：改变 DHCP 租约或重启网络后无需修改配置即可重新上线。
+本机 multicast 联调通过；改变 DHCP 租约、重启网络和 Windows 防火墙矩阵待收尾验证。
+
+当前验证证据：`cargo fmt --check`、`cargo clippy --workspace --all-targets -- -D warnings`、
+`cargo test --workspace`、PWA 语法检查和 `nix flake check path:. --no-build` 均通过；
+本机已验证“首次配对 → Monitor 重启 → Agent 无配对码回连”。
 
 ### M2：Codex 只读
 

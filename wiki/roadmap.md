@@ -1,6 +1,6 @@
 # 开发路线
 
-## M0：工程骨架
+## M0：工程骨架（已完成）
 
 - Nix flake devShell；
 - Rust workspace；
@@ -9,15 +9,15 @@
 
 验收：`cargo check --workspace` 和协议 round-trip 测试通过。
 
-## M1：发现和配对
+## M1：发现和配对（进行中）
 
-- LocalSend 风格 UDP multicast announce；
-- 稳定 `host_id` 和公钥；
-- 一次性配对；
-- DHCP 地址变化后的自动重连；
-- hostname/URL 兜底。
+- 已实现 LocalSend 风格 UDP multicast announce（独立组播组和端口）；
+- 已实现持久 Ed25519 `host_id`、公钥指纹和身份文件；
+- 已实现首次配对码 + challenge-response，并在 Monitor 保存 Agent 公钥、在 Agent pin Monitor 公钥；
+- 已实现 heartbeat、超时和指数退避重连；
+- 待验证 DHCP/网络重启后的跨主机重连；hostname/URL 兜底仍待实现。
 
-验收：改变租约或重启网络后无需修改配置即可重连。
+当前验收：本机 multicast 联调通过；跨主机租约变化和 Windows 防火墙验收待 M1 收尾。
 
 ## M2：Codex 只读监控
 

@@ -1,9 +1,9 @@
 # Codex Monitor 项目索引
 
-状态：`bootstrap`（2026-09-09）
+状态：`m1-in-progress`（2026-09-09）
 
 这是一个面向 BOOX Poke3、NixOS 主机和 Windows 10 主机的 Codex 监控台项目。
-当前仓库保存方案和最小工程骨架，功能实现尚未开始。
+当前仓库保存方案、工程骨架和 M1 发现/配对原型；Codex 采集和网页 API 尚未接入。
 
 ## 入口
 

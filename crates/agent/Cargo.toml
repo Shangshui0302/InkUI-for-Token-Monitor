@@ -6,3 +6,6 @@ rust-version.workspace = true
 
 [dependencies]
 codex-monitor-protocol = { path = "../protocol" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true

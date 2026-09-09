@@ -5,5 +5,8 @@ edition.workspace = true
 rust-version.workspace = true
 
 [dependencies]
+ed25519-dalek.workspace = true
+hex.workspace = true
+rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
