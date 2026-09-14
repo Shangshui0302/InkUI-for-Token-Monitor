@@ -139,6 +139,7 @@ mod tests {
             port: 8787,
             http_port: None,
             public_key: key,
+            pairing_public_key: None,
             nonce: "n".into(),
             issued_at: expires_at - ANNOUNCEMENT_TTL_SECS,
             expires_at,

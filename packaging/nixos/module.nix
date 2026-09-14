@@ -48,8 +48,8 @@ in {
       type = types.nullOr types.str;
       default = null;
       description = ''
-        Optional systemd EnvironmentFile containing CODEX_MONITOR_PAIR_CODE,
-        CODEX_MONITOR_READ_TOKEN and/or CODEX_MONITOR_CONTROL_TOKEN.
+        Optional systemd EnvironmentFile containing CODEX_MONITOR_READ_TOKEN
+        and/or CODEX_MONITOR_CONTROL_TOKEN.
       '';
     };
 

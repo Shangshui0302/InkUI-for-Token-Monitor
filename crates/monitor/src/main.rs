@@ -5,18 +5,18 @@ mod registry;
 
 use codex_monitor_codex_client::CodexCollector;
 use codex_monitor_protocol::{
-    default_identity_path, discovery_interface_v4, pairing_message, validate_pairing_code,
-    CollectorStatus, ControlAction, ControlResult, DiscoveryAnnouncement, Identity,
-    MessageEnvelope, StateSnapshot, WireMessage, ANNOUNCEMENT_TTL_SECS, ANNOUNCE_INTERVAL_SECS,
-    CONTROL_REQUEST_KIND, CONTROL_RESULT_KIND, DISCOVERY_GROUP_V4, DISCOVERY_PORT,
-    HANDSHAKE_TIMEOUT_SECS, HEARTBEAT_INTERVAL_SECS, HEARTBEAT_TIMEOUT_SECS, MAX_WIRE_FRAME_BYTES,
-    MONITOR_PORT, PEER_SYNC_CAPABILITY, PROTOCOL_VERSION, SERVICE_NAME, STATE_SNAPSHOT_CAPABILITY,
-    STATE_SNAPSHOT_KIND,
+    default_identity_path, default_pairing_identity_path, discovery_interface_v4,
+    pairing_acceptance_message, pairing_code_proof, pairing_transcript, validate_node_identity,
+    verify_pairing_signature, CollectorStatus, ControlAction, ControlResult, DiscoveryAnnouncement,
+    Identity, MessageEnvelope, PairingIdentity, StateSnapshot, WireMessage, ANNOUNCEMENT_TTL_SECS,
+    ANNOUNCE_INTERVAL_SECS, CONTROL_REQUEST_KIND, CONTROL_RESULT_KIND, DISCOVERY_GROUP_V4,
+    DISCOVERY_PORT, HANDSHAKE_TIMEOUT_SECS, HEARTBEAT_INTERVAL_SECS, HEARTBEAT_TIMEOUT_SECS,
+    MAX_WIRE_FRAME_BYTES, MONITOR_PORT, P256_PEER_SYNC_CAPABILITY, PEER_SYNC_CAPABILITY,
+    PROTOCOL_VERSION, SERVICE_NAME, STATE_SNAPSHOT_CAPABILITY, STATE_SNAPSHOT_KIND,
 };
 use discovery::DiscoveryCache;
-use pairing::{default_pairing_path, PairingStore};
-use rand::seq::SliceRandom;
-use rand::{Rng, RngCore};
+use pairing::{default_pairing_path, PairingCodeManager, PairingStore};
+use rand::RngCore;
 use registry::Registry;
 use socket2::{Domain, Protocol, SockAddr, Socket, Type};
 use std::collections::{BTreeMap, BTreeSet};
@@ -111,6 +111,7 @@ impl PeerRouter {
         }
     }
 
+    #[cfg(test)]
     async fn sender_for(&self, node_id: &str) -> Option<mpsc::Sender<http::ControlCommand>> {
         self.routes
             .lock()
@@ -206,6 +207,9 @@ async fn main() -> Result<(), BoxError> {
     let identity_path = default_identity_path("monitor");
     let identity_existed = identity_path.exists();
     let identity = Arc::new(Identity::load_or_create(&identity_path)?);
+    let pairing_identity = Arc::new(PairingIdentity::load_or_create(
+        &default_pairing_identity_path("monitor"),
+    )?);
     let monitor_id = identity.host_id();
     let alias_path = identity_path.with_file_name("monitor.alias");
     let alias_value = load_alias(
@@ -215,7 +219,7 @@ async fn main() -> Result<(), BoxError> {
         &monitor_id,
     );
     let alias = Arc::new(RwLock::new(alias_value));
-    let pairing_code = configured_pairing_code(env::var("CODEX_MONITOR_PAIR_CODE"))?;
+    let pairing_codes = PairingCodeManager::new();
     let network_id = env::var("CODEX_MONITOR_NETWORK_ID")
         .ok()
         .filter(|value| !value.is_empty())
@@ -273,6 +277,7 @@ async fn main() -> Result<(), BoxError> {
     let discovery_targets = discovery_target_specs();
 
     let monitor_public_key = identity.public_key_hex();
+    let monitor_pairing_public_key = pairing_identity.public_key();
     let capabilities = vec![
         "sessions".to_string(),
         "control".to_string(),
@@ -285,7 +290,7 @@ async fn main() -> Result<(), BoxError> {
     eprintln!("codex-monitor-node id={monitor_id} listening on 0.0.0.0:{MONITOR_PORT}");
     eprintln!("monitor public key: {monitor_public_key}");
     eprintln!("network id: {network_id}");
-    eprintln!("pairing code: {pairing_code}");
+    eprintln!("pairing code: fetch from authorized GET /api/v1/pairing-code");
     eprintln!("discovery group: {multicast_addr}");
     eprintln!("discovery interface: {discovery_interface}");
     if !discovery_targets.is_empty() {
@@ -342,7 +347,7 @@ async fn main() -> Result<(), BoxError> {
     let http_discoveries = Arc::clone(&discoveries);
     let http_network_id = network_id.clone();
     let http_alias = Arc::clone(&alias);
-    let http_pairing_code = pairing_code.clone();
+    let http_pairing_codes = pairing_codes.clone();
     tokio::spawn(async move {
         if let Err(error) = http::serve(
             http_bind,
@@ -355,7 +360,7 @@ async fn main() -> Result<(), BoxError> {
             pair_tx,
             http_alias,
             alias_path,
-            http_pairing_code,
+            http_pairing_codes,
         )
         .await
         {
@@ -373,10 +378,10 @@ async fn main() -> Result<(), BoxError> {
 
     tokio::spawn(run_peer_discovery(
         Arc::clone(&identity),
+        Arc::clone(&pairing_identity),
         monitor_id.clone(),
         Arc::clone(&alias),
         network_id.clone(),
-        pairing_code.clone(),
         Arc::clone(&pairings),
         Arc::clone(&registry),
         local_snapshot_rx.clone(),
@@ -392,6 +397,7 @@ async fn main() -> Result<(), BoxError> {
     let announce_monitor_id = monitor_id.clone();
     let announce_alias = Arc::clone(&alias);
     let announce_public_key = monitor_public_key.clone();
+    let announce_pairing_public_key = monitor_pairing_public_key.clone();
     let announce_capabilities = capabilities.clone();
     let announce_network_id = network_id.clone();
     let announce_http_port = advertised_http_port;
@@ -409,6 +415,7 @@ async fn main() -> Result<(), BoxError> {
                 port: MONITOR_PORT,
                 http_port: announce_http_port,
                 public_key: announce_public_key.clone(),
+                pairing_public_key: Some(announce_pairing_public_key.clone()),
                 nonce: random_hex(16),
                 issued_at: now,
                 expires_at: now + ANNOUNCEMENT_TTL_SECS,
@@ -449,29 +456,33 @@ async fn main() -> Result<(), BoxError> {
     loop {
         let (stream, peer) = listener.accept().await?;
         let pairings = Arc::clone(&pairings);
+        let pairing_codes = pairing_codes.clone();
         let monitor_id = monitor_id.clone();
-        let pairing_code = pairing_code.clone();
         let monitor_identity = Arc::clone(&identity);
+        let monitor_pairing_identity = Arc::clone(&pairing_identity);
         let registry = Arc::clone(&registry);
         let network_id = network_id.clone();
         let local_snapshot_rx = local_snapshot_rx.clone();
         let local_control_tx = local_control_tx.clone();
         let peer_router = Arc::clone(&peer_router);
         let replay_guard = Arc::clone(&replay_guard);
+        let agent_discoveries = Arc::clone(&discoveries);
         tokio::spawn(async move {
             if let Err(error) = handle_agent(
                 stream,
                 peer,
                 &monitor_id,
-                &pairing_code,
                 monitor_identity,
+                monitor_pairing_identity,
                 Arc::clone(&pairings),
+                pairing_codes,
                 registry,
                 network_id,
                 local_snapshot_rx,
                 local_control_tx,
                 peer_router,
                 replay_guard,
+                agent_discoveries,
             )
             .await
             {
@@ -485,15 +496,17 @@ async fn handle_agent(
     stream: TcpStream,
     peer: SocketAddr,
     monitor_id: &str,
-    pairing_code: &str,
     monitor_identity: Arc<Identity>,
+    monitor_pairing_identity: Arc<PairingIdentity>,
     pairings: Arc<Mutex<PairingStore>>,
+    pairing_codes: PairingCodeManager,
     registry: Arc<RwLock<Registry>>,
     network_id: String,
     mut local_snapshot_rx: watch::Receiver<Option<StateSnapshot>>,
     local_control_tx: mpsc::Sender<http::ControlCommand>,
     peer_router: Arc<PeerRouter>,
     replay_guard: Arc<ControlReplayGuard>,
+    discoveries: Arc<Mutex<DiscoveryCache>>,
 ) -> Result<(), BoxError> {
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half);
@@ -511,7 +524,7 @@ async fn handle_agent(
         os,
         http_port: supplied_http_port,
         public_key,
-        pairing_code: supplied_code,
+        pairing_public_key,
         capabilities,
     } = hello
     else {
@@ -547,7 +560,8 @@ async fn handle_agent(
             return Err("network id mismatch".into());
         }
     }
-    let expected_host_id = Identity::host_id_from_public_key(&public_key).unwrap_or_default();
+    let valid_identity =
+        validate_node_identity(&host_id, &public_key, pairing_public_key.as_deref()).is_ok();
     if host_id.is_empty()
         || host_id.len() > 128
         || alias.is_empty()
@@ -555,9 +569,7 @@ async fn handle_agent(
         || os
             .as_ref()
             .is_some_and(|value| value.is_empty() || value.len() > 64)
-        || public_key.len() != 64
-        || host_id != expected_host_id
-        || hex::decode(&public_key).is_err()
+        || !valid_identity
         || supplied_http_port == Some(0)
         || capabilities.len() > 32
         || capabilities.iter().any(|value| value.len() > 64)
@@ -569,8 +581,14 @@ async fn handle_agent(
         .await
         .public_key_for(&host_id)
         .map(str::to_string);
-    if let Some(expected_key) = known_key.as_deref() {
-        if expected_key != public_key {
+    let pairing_public_key = pairing_public_key.as_deref();
+    let mut pairing_reservation = None;
+    let handshake_public_key = if let Some(expected_key) = known_key.as_deref() {
+        if expected_key == public_key {
+            expected_key.to_string()
+        } else if pairing_public_key == Some(expected_key) {
+            expected_key.to_string()
+        } else {
             send_wire(
                 &mut write_half,
                 &WireMessage::PairRejected {
@@ -580,26 +598,46 @@ async fn handle_agent(
             .await?;
             return Err("paired key mismatch".into());
         }
-    } else if supplied_code.as_deref() != Some(pairing_code) {
-        send_wire(
-            &mut write_half,
-            &WireMessage::PairRejected {
-                reason: "pairing code required".to_string(),
-            },
-        )
-        .await?;
-        return Err("pairing code rejected".into());
-    }
+    } else {
+        pairing_public_key.unwrap_or(&public_key).to_string()
+    };
 
     let challenge = random_hex(32);
-    let challenge_signature =
-        monitor_identity.sign_hex(&pairing_message(&challenge, monitor_id, &host_id));
+    let challenge_uses_p256 = known_key
+        .as_deref()
+        .map(|key| key.starts_with("p256:"))
+        .unwrap_or_else(|| pairing_public_key.is_some() || public_key.starts_with("p256:"));
+    let challenge_key = if challenge_uses_p256 {
+        monitor_pairing_identity.public_key()
+    } else {
+        monitor_identity.public_key_hex()
+    };
+    let local_public_key = monitor_identity.public_key_hex();
+    let local_pairing_key = monitor_pairing_identity.public_key();
+    let remote_pairing_key = pairing_public_key.unwrap_or(&public_key);
+    let transcript = pairing_transcript(
+        &host_id,
+        &public_key,
+        remote_pairing_key,
+        monitor_id,
+        &local_public_key,
+        &local_pairing_key,
+        &network_id,
+        &challenge,
+    );
+    let challenge_signature = if challenge_uses_p256 {
+        monitor_pairing_identity.sign_hex(&transcript)
+    } else {
+        monitor_identity.sign_hex(&transcript)
+    };
     send_wire(
         &mut write_half,
         &WireMessage::PairChallenge {
             challenge: challenge.clone(),
             monitor_id: monitor_id.to_string(),
             signature: challenge_signature,
+            public_key: Some(local_public_key),
+            pairing_public_key: challenge_uses_p256.then_some(challenge_key),
         },
     )
     .await?;
@@ -612,16 +650,13 @@ async fn handle_agent(
     let WireMessage::PairResponse {
         host_id: response_host_id,
         signature,
+        code_proof,
     } = response
     else {
         return Err("expected pair response".into());
     };
     if response_host_id != host_id
-        || !Identity::verify_hex(
-            &public_key,
-            &pairing_message(&challenge, monitor_id, &host_id),
-            &signature,
-        )
+        || !verify_pairing_signature(&handshake_public_key, &transcript, &signature)
     {
         send_wire(
             &mut write_half,
@@ -633,12 +668,76 @@ async fn handle_agent(
         return Err("challenge signature rejected".into());
     }
 
-    pairings.lock().await.remember(&host_id, &public_key)?;
+    if known_key.is_none() {
+        let Some(proof) = code_proof.as_deref() else {
+            send_wire(
+                &mut write_half,
+                &WireMessage::PairRejected {
+                    reason: "pairing code proof required".to_string(),
+                },
+            )
+            .await?;
+            return Err("pairing code proof required".into());
+        };
+        match pairing_codes.reserve_proof(proof, "initiator", &transcript) {
+            Some(reservation) => pairing_reservation = Some(reservation),
+            None => {
+                send_wire(
+                    &mut write_half,
+                    &WireMessage::PairRejected {
+                        reason: "pairing code proof rejected".to_string(),
+                    },
+                )
+                .await?;
+                return Err("pairing code proof rejected".into());
+            }
+        }
+    } else if code_proof.is_some() {
+        return Err("unexpected pairing code proof".into());
+    }
+    let acceptance_code_proof = pairing_reservation
+        .as_ref()
+        .map(|_| pairing_codes.reserved_proof("acceptor", &transcript));
+
+    let persisted = {
+        let mut pairings = pairings.lock().await;
+        if let Some(reservation) = pairing_reservation.take() {
+            match pairing_codes.commit(reservation, || {
+                pairings.remember(&host_id, &handshake_public_key)
+            }) {
+                Ok(()) => Ok(()),
+                Err(pairing::PairingCommitError::InvalidReservation) => {
+                    Err("pairing code was refreshed before pairing completed".to_string())
+                }
+                Err(pairing::PairingCommitError::Store(error)) => Err(error.to_string()),
+            }
+        } else {
+            pairings
+                .remember(&host_id, &handshake_public_key)
+                .map_err(|error| error.to_string())
+        }
+    };
+    if let Err(reason) = persisted {
+        let _ = send_wire(
+            &mut write_half,
+            &WireMessage::PairRejected {
+                reason: reason.clone(),
+            },
+        )
+        .await;
+        return Err(reason.into());
+    }
     send_wire(
         &mut write_half,
         &WireMessage::PairAccepted {
             host_id: host_id.clone(),
             network_id: Some(network_id.clone()),
+            signature: Some(if challenge_uses_p256 {
+                monitor_pairing_identity.sign_hex(&pairing_acceptance_message(&transcript))
+            } else {
+                monitor_identity.sign_hex(&pairing_acceptance_message(&transcript))
+            }),
+            code_proof: acceptance_code_proof,
         },
     )
     .await?;
@@ -649,6 +748,9 @@ async fn handle_agent(
     let peer_sync_supported = capabilities
         .iter()
         .any(|value| value == PEER_SYNC_CAPABILITY);
+    let p256_peer_sync_supported = capabilities
+        .iter()
+        .any(|value| value == P256_PEER_SYNC_CAPABILITY);
     let control_supported = capabilities.iter().any(|value| value == "control");
     registry.write().await.register(
         host_id.clone(),
@@ -657,6 +759,7 @@ async fn handle_agent(
         unix_seconds(),
     );
     registry.write().await.set_os(&host_id, os);
+    discoveries.lock().await.mark_connected(&host_id);
     if let Some(http_port) = supplied_http_port {
         registry.write().await.set_http_endpoints(
             &host_id,
@@ -670,9 +773,11 @@ async fn handle_agent(
             send_snapshot(
                 &mut write_half,
                 &monitor_identity,
+                &monitor_pairing_identity,
                 &network_id,
                 snapshot,
                 peer_sync_supported,
+                p256_peer_sync_supported,
             )
             .await?;
         }
@@ -702,9 +807,11 @@ async fn handle_agent(
                     send_snapshot(
                         &mut write_half,
                         &monitor_identity,
+                        &monitor_pairing_identity,
                         &network_id,
                         snapshot,
                         peer_sync_supported,
+                        p256_peer_sync_supported,
                     )
                     .await?;
                 }
@@ -776,6 +883,7 @@ async fn handle_agent(
                         }
                     }
                     Some(WireMessage::Heartbeat { .. }) => break Err("heartbeat host id mismatch".into()),
+                    Some(WireMessage::HeartbeatAck) => {}
                     Some(WireMessage::StateSnapshot { snapshot }) if state_supported => {
                         if snapshot.host_id != host_id
                             || snapshot.source_id() != host_id
@@ -881,6 +989,9 @@ async fn handle_agent(
     }
     if should_disconnect {
         registry.write().await.disconnect(&host_id, unix_seconds());
+        if pairings.lock().await.public_key_for(&host_id).is_some() {
+            discoveries.lock().await.mark_paired(&host_id);
+        }
     }
     result
 }
@@ -1174,10 +1285,10 @@ fn unavailable_snapshot(
 
 async fn run_peer_discovery(
     identity: Arc<Identity>,
+    pairing_identity: Arc<PairingIdentity>,
     node_id: String,
     alias: Arc<RwLock<String>>,
     network_id: String,
-    pairing_code: String,
     pairings: Arc<Mutex<PairingStore>>,
     registry: Arc<RwLock<Registry>>,
     local_snapshot_rx: watch::Receiver<Option<StateSnapshot>>,
@@ -1244,10 +1355,30 @@ async fn run_peer_discovery(
             continue;
         }
         if manual_code.is_none() {
-            discoveries
+            {
+                discoveries
+                    .lock()
+                    .await
+                    .remember(announcement.clone(), source, now);
+            }
+            // An inbound trusted connection can win the race before this
+            // peer's first UDP announcement reaches the discovery cache.
+            if peer_router.is_connected(&announcement.host_id).await {
+                discoveries
+                    .lock()
+                    .await
+                    .mark_connected(&announcement.host_id);
+            }
+            if pairings
                 .lock()
                 .await
-                .remember(announcement.clone(), source, now);
+                .public_key_for(&announcement.host_id)
+                .is_none()
+            {
+                // Unpaired peers remain discoverable; initial pairing is only
+                // initiated by the explicit HTTP pair command.
+                continue;
+            }
         }
         // Use a deterministic initiator so simultaneous multicast announcements
         // do not create two TCP links and race the peer's liveness state.
@@ -1290,6 +1421,7 @@ async fn run_peer_discovery(
         let peer_address = SocketAddr::new(source.ip(), announcement.port);
         let active_peers = Arc::clone(&active_peers);
         let identity = Arc::clone(&identity);
+        let pairing_identity = Arc::clone(&pairing_identity);
         let pairings = Arc::clone(&pairings);
         let registry = Arc::clone(&registry);
         let local_snapshot_rx = local_snapshot_rx.clone();
@@ -1301,7 +1433,6 @@ async fn run_peer_discovery(
         let node_id = node_id.clone();
         let alias = Arc::clone(&alias);
         let network_id = network_id.clone();
-        let pairing_code = manual_code.unwrap_or_else(|| pairing_code.clone());
         tokio::spawn(async move {
             eprintln!("discovered peer {} at {peer_address}", announcement.alias);
             let mut paired_response = manual_response;
@@ -1309,10 +1440,11 @@ async fn run_peer_discovery(
                 peer_address,
                 &announcement,
                 identity,
+                pairing_identity,
                 node_id,
                 alias.read().await.clone(),
                 network_id,
-                pairing_code,
+                manual_code,
                 Arc::clone(&pairings),
                 registry,
                 local_snapshot_rx,
@@ -1342,10 +1474,11 @@ async fn connect_peer_and_run(
     peer_address: SocketAddr,
     announcement: &DiscoveryAnnouncement,
     identity: Arc<Identity>,
+    pairing_identity: Arc<PairingIdentity>,
     node_id: String,
     alias: String,
     network_id: String,
-    pairing_code: String,
+    pairing_code: Option<String>,
     pairings: Arc<Mutex<PairingStore>>,
     registry: Arc<RwLock<Registry>>,
     mut local_snapshot_rx: watch::Receiver<Option<StateSnapshot>>,
@@ -1356,6 +1489,23 @@ async fn connect_peer_and_run(
     paired_response: &mut Option<oneshot::Sender<Result<(), String>>>,
     discoveries: Arc<Mutex<DiscoveryCache>>,
 ) -> Result<(), BoxError> {
+    let trusted_key = pairings
+        .lock()
+        .await
+        .public_key_for(&announcement.host_id)
+        .map(str::to_string);
+    let announced_pairing_key = announcement.pairing_public_key.as_deref();
+    let remote_default_key = announced_pairing_key.unwrap_or(&announcement.public_key);
+    let expected_remote_key = match trusted_key.as_deref() {
+        Some(key) if key == announcement.public_key || announced_pairing_key == Some(key) => {
+            key.to_string()
+        }
+        Some(_) => return Err("paired peer key does not match its discovery announcement".into()),
+        None => remote_default_key.to_string(),
+    };
+    if trusted_key.is_none() && pairing_code.is_none() {
+        return Err("manual pairing requires the peer's current pairing code".into());
+    }
     let stream = timeout(Duration::from_secs(5), TcpStream::connect(peer_address)).await??;
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half);
@@ -1366,6 +1516,13 @@ async fn connect_peer_and_run(
         STATE_SNAPSHOT_CAPABILITY.to_string(),
         PEER_SYNC_CAPABILITY.to_string(),
     ];
+    let local_public_key = identity.public_key_hex();
+    let local_pairing_key = pairing_identity.public_key();
+    let code_for_proof = if trusted_key.is_none() {
+        pairing_code.as_deref()
+    } else {
+        None
+    };
     send_wire(
         &mut write_half,
         &WireMessage::AgentHello {
@@ -1375,14 +1532,14 @@ async fn connect_peer_and_run(
             alias: alias.clone(),
             os: Some(std::env::consts::OS.to_string()),
             http_port,
-            public_key: identity.public_key_hex(),
-            pairing_code: Some(pairing_code),
+            public_key: local_public_key.clone(),
+            pairing_public_key: Some(local_pairing_key.clone()),
             capabilities: capabilities.clone(),
         },
     )
     .await?;
 
-    match timeout(
+    let server_handshake_key = match timeout(
         Duration::from_secs(HANDSHAKE_TIMEOUT_SECS),
         read_wire(&mut reader),
     )
@@ -1393,29 +1550,56 @@ async fn connect_peer_and_run(
             challenge,
             monitor_id,
             signature,
+            public_key: challenged_public_key,
+            pairing_public_key,
         } => {
+            let server_public_key = challenged_public_key
+                .as_deref()
+                .unwrap_or(&announcement.public_key);
+            let challenge_key = pairing_public_key
+                .as_deref()
+                .unwrap_or(&announcement.public_key);
+            let transcript = pairing_transcript(
+                &node_id,
+                &local_public_key,
+                &local_pairing_key,
+                &monitor_id,
+                server_public_key,
+                announcement
+                    .pairing_public_key
+                    .as_deref()
+                    .unwrap_or(&announcement.public_key),
+                &network_id,
+                &challenge,
+            );
             if monitor_id != announcement.host_id
-                || !Identity::verify_hex(
-                    &announcement.public_key,
-                    &pairing_message(&challenge, &monitor_id, &node_id),
-                    &signature,
-                )
+                || server_public_key != announcement.public_key
+                || challenge_key != expected_remote_key
+                || !verify_pairing_signature(challenge_key, &transcript, &signature)
             {
                 return Err("peer challenge signature rejected".into());
             }
-            let signature = identity.sign_hex(&pairing_message(&challenge, &monitor_id, &node_id));
+            let signature = if expected_remote_key.starts_with("p256:") {
+                pairing_identity.sign_hex(&transcript)
+            } else {
+                identity.sign_hex(&transcript)
+            };
+            let code_proof =
+                code_for_proof.map(|code| pairing_code_proof(code, "initiator", &transcript));
             send_wire(
                 &mut write_half,
                 &WireMessage::PairResponse {
                     host_id: node_id.clone(),
                     signature,
+                    code_proof,
                 },
             )
             .await?;
+            (challenge_key.to_string(), transcript)
         }
         WireMessage::PairRejected { reason } => return Err(reason.into()),
         other => return Err(format!("unexpected peer pairing message: {other:?}").into()),
-    }
+    };
 
     match timeout(
         Duration::from_secs(HANDSHAKE_TIMEOUT_SECS),
@@ -1427,6 +1611,8 @@ async fn connect_peer_and_run(
         WireMessage::PairAccepted {
             host_id,
             network_id: accepted_network_id,
+            signature,
+            code_proof,
         } if host_id == node_id => {
             if accepted_network_id
                 .as_deref()
@@ -1434,10 +1620,29 @@ async fn connect_peer_and_run(
             {
                 return Err("peer accepted a different network id".into());
             }
+            let (server_key, transcript) = server_handshake_key;
+            let signature = signature.as_deref().ok_or("unauthenticated PairAccepted")?;
+            if !verify_pairing_signature(
+                &server_key,
+                &pairing_acceptance_message(&transcript),
+                signature,
+            ) {
+                return Err("PairAccepted signature rejected".into());
+            }
+            if let Some(code) = code_for_proof {
+                let expected = pairing_code_proof(code, "acceptor", &transcript);
+                if !code_proof.as_deref().is_some_and(|proof| {
+                    codex_monitor_protocol::constant_time_hex_eq(&expected, proof)
+                }) {
+                    return Err("peer did not prove possession of pairing code".into());
+                }
+            } else if code_proof.is_some() {
+                return Err("unexpected PairAccepted code proof".into());
+            }
             pairings
                 .lock()
                 .await
-                .remember(&announcement.host_id, &announcement.public_key)?;
+                .remember(&announcement.host_id, &server_key)?;
         }
         WireMessage::PairRejected { reason } => return Err(reason.into()),
         other => return Err(format!("unexpected peer pairing result: {other:?}").into()),
@@ -1471,6 +1676,10 @@ async fn connect_peer_and_run(
         .capabilities
         .iter()
         .any(|value| value == PEER_SYNC_CAPABILITY);
+    let p256_peer_sync_supported = announcement
+        .capabilities
+        .iter()
+        .any(|value| value == P256_PEER_SYNC_CAPABILITY);
     let control_supported = announcement
         .capabilities
         .iter()
@@ -1481,9 +1690,11 @@ async fn connect_peer_and_run(
         send_snapshot(
             &mut write_half,
             &identity,
+            &pairing_identity,
             &network_id,
             snapshot,
             peer_sync_supported,
+            p256_peer_sync_supported,
         )
         .await?;
     }
@@ -1517,9 +1728,11 @@ async fn connect_peer_and_run(
                     send_snapshot(
                         &mut write_half,
                         &identity,
+                        &pairing_identity,
                         &network_id,
                         snapshot,
                         peer_sync_supported,
+                        p256_peer_sync_supported,
                     )
                     .await?;
                 }
@@ -1886,15 +2099,36 @@ fn valid_hostname(value: &str) -> bool {
 async fn send_snapshot<W>(
     writer: &mut W,
     identity: &Identity,
+    pairing_identity: &PairingIdentity,
     network_id: &str,
     snapshot: StateSnapshot,
     peer_sync: bool,
+    p256_peer_sync: bool,
 ) -> Result<(), BoxError>
 where
     W: AsyncWrite + Unpin,
 {
-    if peer_sync {
-        let envelope = MessageEnvelope::new(
+    if peer_sync || p256_peer_sync {
+        if p256_peer_sync {
+            let payload_json = serde_json::to_string(&snapshot)?;
+            let mut signing_bytes = format!(
+                "codex-monitor/android-snapshot-v1:{network_id}:{}:",
+                identity.host_id()
+            )
+            .into_bytes();
+            signing_bytes.extend_from_slice(payload_json.as_bytes());
+            return send_wire(
+                writer,
+                &WireMessage::AndroidSnapshot {
+                    network_id: network_id.to_string(),
+                    sender_id: identity.host_id(),
+                    payload_json,
+                    signature: pairing_identity.sign_hex(&signing_bytes),
+                },
+            )
+            .await;
+        }
+        let mut envelope = MessageEnvelope::new(
             STATE_SNAPSHOT_KIND,
             network_id,
             identity.host_id(),
@@ -1903,7 +2137,7 @@ where
             None,
             snapshot,
         );
-        let envelope = identity.signed_envelope(envelope)?;
+        identity.sign_envelope(&mut envelope)?;
         send_wire(writer, &WireMessage::PeerSnapshot { envelope }).await
     } else {
         send_wire(writer, &WireMessage::StateSnapshot { snapshot }).await
@@ -1937,38 +2171,6 @@ where
         return Err("wire frame exceeds maximum size".into());
     }
     Ok(Some(serde_json::from_slice(&line)?))
-}
-
-fn generate_code() -> String {
-    const DIGITS: &[u8] = b"0123456789";
-    const UPPERCASE: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-    const LOWERCASE: &[u8] = b"abcdefghijklmnopqrstuvwxyz";
-    const ALPHANUMERIC: &[u8] = b"0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-    let mut rng = rand::rngs::OsRng;
-    let mut code = Vec::with_capacity(codex_monitor_protocol::PAIRING_CODE_LENGTH);
-    code.push(DIGITS[rng.gen_range(0..DIGITS.len())]);
-    code.push(UPPERCASE[rng.gen_range(0..UPPERCASE.len())]);
-    code.push(LOWERCASE[rng.gen_range(0..LOWERCASE.len())]);
-    for _ in 3..codex_monitor_protocol::PAIRING_CODE_LENGTH {
-        code.push(ALPHANUMERIC[rng.gen_range(0..ALPHANUMERIC.len())]);
-    }
-    code.shuffle(&mut rng);
-    String::from_utf8(code).expect("pairing alphabet is ASCII")
-}
-
-fn configured_pairing_code(configured: Result<String, env::VarError>) -> Result<String, String> {
-    match configured {
-        Ok(value) => {
-            validate_pairing_code(&value)
-                .map_err(|reason| format!("CODEX_MONITOR_PAIR_CODE {reason}"))?;
-            Ok(value)
-        }
-        Err(env::VarError::NotPresent) => Ok(generate_code()),
-        Err(error) => Err(format!(
-            "CODEX_MONITOR_PAIR_CODE is not valid UTF-8: {error}"
-        )),
-    }
 }
 
 async fn duplicate_pair_result(peer_id: &str, peer_router: &PeerRouter) -> Result<(), String> {
@@ -2050,37 +2252,15 @@ fn unix_seconds() -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{
-        configured_pairing_code, duplicate_pair_result, generate_code, http_endpoint_candidates,
-        load_alias, parse_discovery_target_specs, send_discovery_announcement,
-        unavailable_snapshot, with_default_discovery_port, CollectorStatus, ControlAction,
-        ControlReplayGuard, DiscoveryAnnouncement, PeerRouter, StateSnapshot, UdpSocket,
-        ANNOUNCEMENT_TTL_SECS, DISCOVERY_PORT, MONITOR_PORT, PEER_SYNC_CAPABILITY,
-        PROTOCOL_VERSION, SERVICE_NAME,
+        duplicate_pair_result, http_endpoint_candidates, load_alias, parse_discovery_target_specs,
+        send_discovery_announcement, unavailable_snapshot, with_default_discovery_port,
+        CollectorStatus, ControlAction, ControlReplayGuard, DiscoveryAnnouncement, PeerRouter,
+        StateSnapshot, UdpSocket, ANNOUNCEMENT_TTL_SECS, DISCOVERY_PORT, MONITOR_PORT,
+        PEER_SYNC_CAPABILITY, PROTOCOL_VERSION, SERVICE_NAME,
     };
     use codex_monitor_protocol::{ControlRequest, SessionState};
     use std::net::{IpAddr, Ipv4Addr};
     use tokio::sync::{mpsc, oneshot};
-
-    #[test]
-    fn generated_pairing_codes_are_eight_mixed_ascii_alphanumeric_chars() {
-        for _ in 0..64 {
-            let code = generate_code();
-            assert_eq!(code.len(), 8);
-            assert!(super::validate_pairing_code(&code).is_ok());
-            assert!(code.bytes().any(|byte| byte.is_ascii_digit()));
-            assert!(code.bytes().any(|byte| byte.is_ascii_uppercase()));
-            assert!(code.bytes().any(|byte| byte.is_ascii_lowercase()));
-        }
-    }
-
-    #[test]
-    fn invalid_configured_pairing_code_is_rejected_not_replaced() {
-        let error = configured_pairing_code(Ok("246810".to_string())).unwrap_err();
-        assert!(error.contains("CODEX_MONITOR_PAIR_CODE"));
-        assert!(error.contains("exactly 8 ASCII letters and digits"));
-        let generated = configured_pairing_code(Err(std::env::VarError::NotPresent)).unwrap();
-        assert!(super::validate_pairing_code(&generated).is_ok());
-    }
 
     #[tokio::test]
     async fn duplicate_pair_reports_pending_until_router_confirms_connection() {
@@ -2218,6 +2398,7 @@ mod tests {
             port: MONITOR_PORT,
             http_port: Some(8788),
             public_key: "11".repeat(32),
+            pairing_public_key: None,
             nonce: "test-nonce".to_string(),
             issued_at,
             expires_at: issued_at + ANNOUNCEMENT_TTL_SECS,
@@ -2350,6 +2531,9 @@ mod tests {
         let address = listener.local_addr().unwrap();
         let server = Arc::clone(&server_identity);
         let client_public_key = client_identity.public_key_hex();
+        let client_pairing_identity =
+            super::PairingIdentity::load_or_create(&root.join("client.pairing.identity")).unwrap();
+        let server_public_key = server_identity.public_key_hex();
         let server_task = tokio::spawn(async move {
             let (stream, _) = listener.accept().await.unwrap();
             let (read, mut write) = stream.into_split();
@@ -2357,23 +2541,34 @@ mod tests {
             let hello = super::read_wire(&mut reader).await.unwrap().unwrap();
             let super::WireMessage::AgentHello {
                 host_id,
-                pairing_code,
+                public_key,
+                pairing_public_key,
                 ..
             } = hello
             else {
                 panic!("hello")
             };
-            assert_eq!(pairing_code.as_deref(), Some("Ab3dE7qK"));
             let challenge = "fixture-challenge";
             let monitor_id = server.host_id();
-            let signature =
-                server.sign_hex(&super::pairing_message(challenge, &monitor_id, &host_id));
+            let transcript = super::pairing_transcript(
+                &host_id,
+                &public_key,
+                pairing_public_key.as_deref().unwrap_or(&public_key),
+                &monitor_id,
+                &server_public_key,
+                &server_public_key,
+                "test-network",
+                challenge,
+            );
+            let signature = server.sign_hex(&transcript);
             super::send_wire(
                 &mut write,
                 &super::WireMessage::PairChallenge {
                     challenge: challenge.into(),
                     monitor_id: monitor_id.clone(),
                     signature,
+                    public_key: Some(server_public_key.clone()),
+                    pairing_public_key: None,
                 },
             )
             .await
@@ -2382,6 +2577,7 @@ mod tests {
             let super::WireMessage::PairResponse {
                 host_id: response_id,
                 signature,
+                code_proof,
             } = response
             else {
                 panic!("response")
@@ -2389,14 +2585,32 @@ mod tests {
             assert_eq!(response_id, host_id);
             assert!(super::Identity::verify_hex(
                 &client_public_key,
-                &super::pairing_message(challenge, &monitor_id, &host_id),
+                &transcript,
                 &signature
             ));
+            assert!(code_proof.as_deref().is_some_and(|proof| {
+                codex_monitor_protocol::constant_time_hex_eq(
+                    proof,
+                    &codex_monitor_protocol::pairing_code_proof(
+                        "Ab3dE7qK",
+                        "initiator",
+                        &transcript,
+                    ),
+                )
+            }));
             super::send_wire(
                 &mut write,
                 &super::WireMessage::PairAccepted {
                     host_id,
                     network_id: Some("test-network".into()),
+                    signature: Some(server.sign_hex(
+                        &codex_monitor_protocol::pairing_acceptance_message(&transcript),
+                    )),
+                    code_proof: Some(codex_monitor_protocol::pairing_code_proof(
+                        "Ab3dE7qK",
+                        "acceptor",
+                        &transcript,
+                    )),
                 },
             )
             .await
@@ -2411,6 +2625,7 @@ mod tests {
             port: address.port(),
             http_port: None,
             public_key: server_identity.public_key_hex(),
+            pairing_public_key: None,
             nonce: "n".into(),
             issued_at: super::unix_seconds(),
             expires_at: super::unix_seconds() + ANNOUNCEMENT_TTL_SECS,
@@ -2433,10 +2648,11 @@ mod tests {
                 address,
                 &announcement,
                 Arc::clone(&client_identity),
+                Arc::new(client_pairing_identity),
                 client_identity.host_id(),
                 "client".into(),
                 "test-network".into(),
-                "Ab3dE7qK".into(),
+                Some("Ab3dE7qK".into()),
                 Arc::clone(&pairings),
                 registry,
                 snapshot_rx,
@@ -2458,6 +2674,194 @@ mod tests {
             Some(server_identity.public_key_hex().as_str())
         );
         server_task.await.unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn inbound_p256_pairing_consumes_code_and_persists_handshake_key() {
+        use std::sync::Arc;
+        use tokio::io::BufReader;
+        use tokio::net::{TcpListener, TcpStream};
+        use tokio::sync::{watch, Mutex, RwLock};
+
+        let root = std::env::temp_dir().join(format!(
+            "codex-monitor-inbound-p256-pair-test-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let monitor_identity =
+            Arc::new(super::Identity::load_or_create(&root.join("monitor.identity")).unwrap());
+        let monitor_pairing_identity = Arc::new(
+            super::PairingIdentity::load_or_create(&root.join("monitor.pairing.identity")).unwrap(),
+        );
+        let client_identity =
+            super::Identity::load_or_create(&root.join("client.identity")).unwrap();
+        let client_pairing_identity =
+            super::PairingIdentity::load_or_create(&root.join("client.pairing.identity")).unwrap();
+        let pairings = Arc::new(Mutex::new(
+            super::PairingStore::load(root.join("pairings.json")).unwrap(),
+        ));
+        let pairing_codes = super::PairingCodeManager::new();
+        let code = pairing_codes.rotate().code;
+        let registry = Arc::new(RwLock::new(
+            super::Registry::load(root.join("state.json"), Some("test-network")).unwrap(),
+        ));
+        let (_snapshot_tx, snapshot_rx) = watch::channel::<Option<StateSnapshot>>(None);
+        let (control_tx, _control_rx) = mpsc::channel(1);
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let now = super::unix_seconds();
+        let discoveries = Arc::new(Mutex::new(super::DiscoveryCache::default()));
+        discoveries.lock().await.remember(
+            DiscoveryAnnouncement {
+                service: SERVICE_NAME.into(),
+                version: PROTOCOL_VERSION,
+                host_id: client_identity.host_id(),
+                alias: "android peer".into(),
+                os: Some("android".into()),
+                port: address.port(),
+                http_port: None,
+                public_key: client_identity.public_key_hex(),
+                pairing_public_key: Some(client_pairing_identity.public_key()),
+                nonce: "test-nonce".into(),
+                issued_at: now,
+                expires_at: now + ANNOUNCEMENT_TTL_SECS,
+                capabilities: vec![PEER_SYNC_CAPABILITY.into()],
+                network_id: Some("test-network".into()),
+            },
+            address,
+            now,
+        );
+        let server_pairings = Arc::clone(&pairings);
+        let server_pairing_codes = pairing_codes.clone();
+        let server_registry = Arc::clone(&registry);
+        let server_identity = Arc::clone(&monitor_identity);
+        let server_pairing_identity = Arc::clone(&monitor_pairing_identity);
+        let server_discoveries = Arc::clone(&discoveries);
+        let server_task = tokio::spawn(async move {
+            let (stream, peer) = listener.accept().await.unwrap();
+            super::handle_agent(
+                stream,
+                peer,
+                &server_identity.host_id(),
+                server_identity,
+                server_pairing_identity,
+                server_pairings,
+                server_pairing_codes,
+                server_registry,
+                "test-network".into(),
+                snapshot_rx,
+                control_tx,
+                Arc::new(super::PeerRouter::default()),
+                Arc::new(super::ControlReplayGuard::default()),
+                server_discoveries,
+            )
+            .await
+        });
+
+        let stream = TcpStream::connect(address).await.unwrap();
+        let (read, mut write) = stream.into_split();
+        let mut reader = BufReader::new(read);
+        super::send_wire(
+            &mut write,
+            &super::WireMessage::AgentHello {
+                version: PROTOCOL_VERSION,
+                network_id: Some("test-network".into()),
+                host_id: client_identity.host_id(),
+                alias: "android peer".into(),
+                os: Some("android".into()),
+                http_port: None,
+                public_key: client_identity.public_key_hex(),
+                pairing_public_key: Some(client_pairing_identity.public_key()),
+                capabilities: vec![],
+            },
+        )
+        .await
+        .unwrap();
+        let challenge = super::read_wire(&mut reader).await.unwrap().unwrap();
+        let super::WireMessage::PairChallenge {
+            challenge,
+            monitor_id,
+            signature,
+            public_key: Some(monitor_primary_key),
+            pairing_public_key: Some(monitor_public_key),
+        } = challenge
+        else {
+            panic!("expected P-256 pair challenge")
+        };
+        assert_eq!(monitor_id, monitor_identity.host_id());
+        let transcript = super::pairing_transcript(
+            &client_identity.host_id(),
+            &client_identity.public_key_hex(),
+            &client_pairing_identity.public_key(),
+            &monitor_id,
+            &monitor_primary_key,
+            &monitor_public_key,
+            "test-network",
+            &challenge,
+        );
+        assert!(codex_monitor_protocol::verify_pairing_signature(
+            &monitor_public_key,
+            &transcript,
+            &signature,
+        ));
+        assert!(!codex_monitor_protocol::verify_pairing_signature(
+            &monitor_public_key,
+            &codex_monitor_protocol::pairing_acceptance_message(&transcript),
+            &signature,
+        ));
+        super::send_wire(
+            &mut write,
+            &super::WireMessage::PairResponse {
+                host_id: client_identity.host_id(),
+                signature: client_pairing_identity.sign_hex(&transcript),
+                code_proof: Some(codex_monitor_protocol::pairing_code_proof(
+                    &code,
+                    "initiator",
+                    &transcript,
+                )),
+            },
+        )
+        .await
+        .unwrap();
+        let accepted = super::read_wire(&mut reader).await.unwrap().unwrap();
+        let super::WireMessage::PairAccepted {
+            signature: Some(accepted_signature),
+            code_proof: Some(accepted_proof),
+            ..
+        } = accepted
+        else {
+            panic!("expected authenticated acceptance")
+        };
+        assert!(codex_monitor_protocol::verify_pairing_signature(
+            &monitor_public_key,
+            &codex_monitor_protocol::pairing_acceptance_message(&transcript),
+            &accepted_signature
+        ));
+        assert!(codex_monitor_protocol::constant_time_hex_eq(
+            &accepted_proof,
+            &codex_monitor_protocol::pairing_code_proof(&code, "acceptor", &transcript)
+        ));
+        assert_eq!(
+            discoveries.lock().await.views(now, "test-network")[0].pairing_state,
+            "connected"
+        );
+        drop(write);
+        let _ = server_task.await.unwrap();
+        assert_eq!(
+            discoveries.lock().await.views(now, "test-network")[0].pairing_state,
+            "paired"
+        );
+
+        assert_eq!(
+            pairings
+                .lock()
+                .await
+                .public_key_for(&client_identity.host_id()),
+            Some(client_pairing_identity.public_key().as_str())
+        );
+        assert!(pairing_codes.reserve(&code).is_none());
         std::fs::remove_dir_all(root).unwrap();
     }
 }

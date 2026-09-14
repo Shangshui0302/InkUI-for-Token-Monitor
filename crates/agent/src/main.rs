@@ -2,8 +2,9 @@ mod trust;
 
 use codex_monitor_codex_client::CodexCollector;
 use codex_monitor_protocol::{
-    default_identity_path, discovery_interface_v4, pairing_message, validate_pairing_code,
-    CollectorStatus, DiscoveryAnnouncement, Identity, StateSnapshot, WireMessage,
+    default_identity_path, default_pairing_identity_path, discovery_interface_v4,
+    pairing_acceptance_message, pairing_transcript, verify_pairing_signature, CollectorStatus,
+    DiscoveryAnnouncement, Identity, PairingIdentity, StateSnapshot, WireMessage,
     DISCOVERY_GROUP_V4, DISCOVERY_PORT, HANDSHAKE_TIMEOUT_SECS, HEARTBEAT_INTERVAL_SECS,
     PROTOCOL_VERSION, SERVICE_NAME, STATE_SNAPSHOT_CAPABILITY,
 };
@@ -24,27 +25,16 @@ type BoxError = Box<dyn Error + Send + Sync>;
 #[tokio::main]
 async fn main() -> Result<(), BoxError> {
     let identity = Identity::load_or_create(&default_identity_path("agent"))?;
+    let pairing_identity =
+        PairingIdentity::load_or_create(&default_pairing_identity_path("agent"))?;
     let alias = env::var("CODEX_MONITOR_ALIAS").unwrap_or_else(|_| local_hostname());
-    let pairing_code = match env::var("CODEX_MONITOR_PAIR_CODE") {
-        Ok(value) => {
-            validate_pairing_code(&value)
-                .map_err(|reason| format!("CODEX_MONITOR_PAIR_CODE {reason}"))?;
-            Some(value)
-        }
-        Err(env::VarError::NotPresent) => None,
-        Err(error) => {
-            return Err(format!("CODEX_MONITOR_PAIR_CODE is not valid UTF-8: {error}").into());
-        }
-    };
     let mut monitor_trust = MonitorTrustStore::load(default_monitor_trust_path())?;
 
     eprintln!(
         "codex-monitor-agent host_id={} alias={alias}",
         identity.host_id()
     );
-    if pairing_code.is_none() {
-        eprintln!("CODEX_MONITOR_PAIR_CODE is unset; only a previously paired host can connect");
-    }
+    eprintln!("unpaired monitors are discovery-only; pair them explicitly before connecting");
 
     let discovery_interface = discovery_interface_v4()?;
     let socket = StdUdpSocket::bind((Ipv4Addr::UNSPECIFIED, DISCOVERY_PORT))?;
@@ -91,8 +81,8 @@ async fn main() -> Result<(), BoxError> {
             monitor_addr,
             &announcement,
             &identity,
+            &pairing_identity,
             &alias,
-            pairing_code.as_deref(),
             announcement
                 .network_id
                 .as_deref()
@@ -122,12 +112,16 @@ async fn connect_and_run(
     monitor_addr: SocketAddr,
     announcement: &DiscoveryAnnouncement,
     identity: &Identity,
+    pairing_identity: &PairingIdentity,
     alias: &str,
-    pairing_code: Option<&str>,
     network_id: &str,
     supports_state: bool,
     monitor_trust: &mut MonitorTrustStore,
 ) -> Result<(), BoxError> {
+    let trusted_key = monitor_trust
+        .public_key_for(announcement)
+        .map(str::to_string)
+        .ok_or("monitor is not paired")?;
     let stream = timeout(Duration::from_secs(5), TcpStream::connect(monitor_addr)).await??;
     let (read_half, mut write_half) = stream.into_split();
     let mut reader = BufReader::new(read_half);
@@ -135,23 +129,26 @@ async fn connect_and_run(
     if supports_state {
         capabilities.push(STATE_SNAPSHOT_CAPABILITY.to_string());
     }
+    let local_host_id = identity.host_id();
+    let local_public_key = identity.public_key_hex();
+    let local_pairing_key = pairing_identity.public_key();
     send_wire(
         &mut write_half,
         &WireMessage::AgentHello {
             version: PROTOCOL_VERSION,
             network_id: Some(network_id.to_string()),
-            host_id: identity.host_id(),
+            host_id: local_host_id.clone(),
             alias: alias.to_string(),
             os: Some(std::env::consts::OS.to_string()),
             http_port: None,
-            public_key: identity.public_key_hex(),
-            pairing_code: pairing_code.map(str::to_string),
+            public_key: local_public_key.clone(),
+            pairing_public_key: Some(local_pairing_key.clone()),
             capabilities,
         },
     )
     .await?;
 
-    match timeout(
+    let server_transcript = match timeout(
         Duration::from_secs(HANDSHAKE_TIMEOUT_SECS),
         read_wire(&mut reader),
     )
@@ -162,33 +159,54 @@ async fn connect_and_run(
             challenge,
             monitor_id,
             signature,
+            public_key: challenged_public_key,
+            pairing_public_key,
         } => {
+            let server_public_key = challenged_public_key
+                .as_deref()
+                .unwrap_or(&announcement.public_key);
+            let challenge_key = pairing_public_key
+                .as_deref()
+                .unwrap_or(&announcement.public_key);
+            let transcript = pairing_transcript(
+                &local_host_id,
+                &local_public_key,
+                &local_pairing_key,
+                &monitor_id,
+                server_public_key,
+                announcement
+                    .pairing_public_key
+                    .as_deref()
+                    .unwrap_or(&announcement.public_key),
+                network_id,
+                &challenge,
+            );
             if monitor_id != announcement.host_id
-                || !Identity::verify_hex(
-                    &announcement.public_key,
-                    &pairing_message(&challenge, &monitor_id, &identity.host_id()),
-                    &signature,
-                )
+                || server_public_key != announcement.public_key
+                || challenge_key != trusted_key.as_str()
+                || !verify_pairing_signature(challenge_key, &transcript, &signature)
             {
                 return Err("monitor challenge signature rejected".into());
             }
-            let signature = identity.sign_hex(&pairing_message(
-                &challenge,
-                &monitor_id,
-                &identity.host_id(),
-            ));
+            let signature = if trusted_key.starts_with("p256:") {
+                pairing_identity.sign_hex(&transcript)
+            } else {
+                identity.sign_hex(&transcript)
+            };
             send_wire(
                 &mut write_half,
                 &WireMessage::PairResponse {
-                    host_id: identity.host_id(),
+                    host_id: local_host_id.clone(),
                     signature,
+                    code_proof: None,
                 },
             )
             .await?;
+            transcript
         }
         WireMessage::PairRejected { reason } => return Err(reason.into()),
         other => return Err(format!("unexpected pairing message: {other:?}").into()),
-    }
+    };
 
     match timeout(
         Duration::from_secs(HANDSHAKE_TIMEOUT_SECS),
@@ -200,14 +218,27 @@ async fn connect_and_run(
         WireMessage::PairAccepted {
             host_id,
             network_id: accepted_network_id,
-        } if host_id == identity.host_id() => {
+            signature,
+            code_proof,
+        } if host_id == local_host_id => {
             if accepted_network_id
                 .as_deref()
                 .is_some_and(|value| !value.is_empty() && value != network_id)
             {
                 return Err("monitor accepted a different network id".into());
             }
-            monitor_trust.remember(announcement)?;
+            if code_proof.is_some()
+                || !signature.as_deref().is_some_and(|signature| {
+                    verify_pairing_signature(
+                        &trusted_key,
+                        &pairing_acceptance_message(&server_transcript),
+                        signature,
+                    )
+                })
+            {
+                return Err("monitor PairAccepted authentication failed".into());
+            }
+            monitor_trust.remember(announcement, &trusted_key)?;
             eprintln!("paired with monitor {monitor_addr}");
         }
         WireMessage::PairRejected { reason } => return Err(reason.into()),

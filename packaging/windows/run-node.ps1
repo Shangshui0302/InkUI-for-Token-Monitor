@@ -2,7 +2,6 @@
 param(
   [string]$Binary = (Join-Path $PSScriptRoot "dist\codex-monitor-server.exe"),
   [string]$NetworkId = "codex-monitor-lan",
-  [string]$PairCode,
   [string]$HttpBind = "0.0.0.0:8788",
   [string]$DiscoveryInterface,
   [string]$CodexBin,
@@ -49,7 +48,6 @@ $env:CODEX_MONITOR_HTTP_BIND = $httpBindValue
 
 $optionalParameters = @{
   DiscoveryInterface = "CODEX_MONITOR_DISCOVERY_INTERFACE"
-  PairCode = "CODEX_MONITOR_PAIR_CODE"
   CodexBin = "CODEX_MONITOR_CODEX_BIN"
   ReadToken = "CODEX_MONITOR_READ_TOKEN"
   ControlToken = "CODEX_MONITOR_CONTROL_TOKEN"

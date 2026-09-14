@@ -4,7 +4,10 @@ mod identity;
 mod network;
 
 pub use identity::{
-    default_identity_path, pairing_message, sign_envelope, verify_envelope, Identity,
+    constant_time_hex_eq, default_identity_path, default_pairing_identity_path,
+    pairing_acceptance_message, pairing_code_proof, pairing_message, pairing_transcript,
+    sign_envelope, validate_node_identity, validate_pairing_public_key, verify_envelope,
+    verify_pairing_signature, Identity, PairingIdentity,
 };
 pub use network::discovery_interface_v4;
 
@@ -27,6 +30,8 @@ pub const MAX_WIRE_FRAME_BYTES: usize = 512 * 1024;
 pub const STATE_SNAPSHOT_CAPABILITY: &str = "state-snapshot-v1";
 /// Capability negotiated before exchanging peer-owned state snapshots.
 pub const PEER_SYNC_CAPABILITY: &str = "peer-sync-v1";
+/// Peer snapshots signed by the P-256 pairing identity for Android 10 clients.
+pub const P256_PEER_SYNC_CAPABILITY: &str = "peer-sync-p256-v1";
 /// Version of the language-neutral envelope. The legacy WireMessage protocol remains v1.
 pub const ENVELOPE_VERSION: u16 = 2;
 pub const MESH_PROTOCOL_VERSION: u16 = ENVELOPE_VERSION;
@@ -390,6 +395,15 @@ pub struct DiscoveryAnnouncement {
     )]
     pub http_port: Option<u16>,
     pub public_key: String,
+    /// Optional P-256 SPKI key used for Android-compatible pairing signatures.
+    /// `public_key` remains the legacy Ed25519 node identity.
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "pairingPublicKey",
+        alias = "pairing_public_key"
+    )]
+    pub pairing_public_key: Option<String>,
     pub nonce: String,
     pub issued_at: u64,
     pub expires_at: u64,
@@ -432,12 +446,11 @@ impl DiscoveryAnnouncement {
         if self.http_port == Some(0) {
             return Err("invalid http port");
         }
-        if self.public_key.len() != 64 || hex::decode(&self.public_key).is_err() {
-            return Err("invalid public key");
-        }
-        if self.host_id != format!("ed25519:{}", &self.public_key[..16]) {
-            return Err("host id does not match public key");
-        }
+        validate_node_identity(
+            &self.host_id,
+            &self.public_key,
+            self.pairing_public_key.as_deref(),
+        )?;
         if self.nonce.is_empty() || self.nonce.len() > 128 {
             return Err("invalid nonce");
         }
@@ -603,17 +616,34 @@ pub enum WireMessage {
         )]
         http_port: Option<u16>,
         public_key: String,
-        pairing_code: Option<String>,
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            rename = "pairingPublicKey",
+            alias = "pairing_public_key"
+        )]
+        pairing_public_key: Option<String>,
         capabilities: Vec<String>,
     },
     PairChallenge {
         challenge: String,
         monitor_id: String,
         signature: String,
+        #[serde(default, skip_serializing_if = "Option::is_none", rename = "publicKey")]
+        public_key: Option<String>,
+        #[serde(
+            default,
+            skip_serializing_if = "Option::is_none",
+            rename = "pairingPublicKey",
+            alias = "pairing_public_key"
+        )]
+        pairing_public_key: Option<String>,
     },
     PairResponse {
         host_id: String,
         signature: String,
+        #[serde(default, skip_serializing_if = "Option::is_none", rename = "codeProof")]
+        code_proof: Option<String>,
     },
     PairAccepted {
         host_id: String,
@@ -624,6 +654,10 @@ pub enum WireMessage {
             alias = "network_id"
         )]
         network_id: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        signature: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none", rename = "codeProof")]
+        code_proof: Option<String>,
     },
     PairRejected {
         reason: String,
@@ -637,6 +671,16 @@ pub enum WireMessage {
     },
     PeerSnapshot {
         envelope: MessageEnvelope<StateSnapshot>,
+    },
+    /// Exact JSON bytes plus a P-256 signature for Android 10 peers.
+    AndroidSnapshot {
+        #[serde(rename = "networkId")]
+        network_id: String,
+        #[serde(rename = "senderId")]
+        sender_id: String,
+        #[serde(rename = "payloadJson")]
+        payload_json: String,
+        signature: String,
     },
     ControlRequest {
         envelope: MessageEnvelope<ControlRequest>,
@@ -663,6 +707,59 @@ mod tests {
     }
 
     #[test]
+    fn pairing_code_hmac_and_transcript_are_canonical() {
+        let transcript = pairing_transcript(
+            "initiator-id",
+            "ed:aa",
+            "p256:ii",
+            "acceptor-id",
+            "ed:bb",
+            "p256:jj",
+            "test-network",
+            "010203",
+        );
+        assert_eq!(
+            pairing_code_proof("Ab3dE7qK", "initiator", &transcript),
+            "d3c36aa348cdf4d9e468cd777935154e3151affe24684827d1ecb4aae026b94c",
+        );
+        assert_ne!(
+            pairing_code_proof("Ab3dE7qK", "initiator", &transcript),
+            pairing_code_proof("Ab3dE7qK", "acceptor", &transcript),
+        );
+        let changed = pairing_transcript(
+            "initiator-id",
+            "ed:aa",
+            "p256:ii",
+            "acceptor-id",
+            "ed:bb",
+            "p256:jj",
+            "other-network",
+            "010203",
+        );
+        assert_ne!(
+            pairing_code_proof("Ab3dE7qK", "initiator", &transcript),
+            pairing_code_proof("Ab3dE7qK", "initiator", &changed),
+        );
+    }
+
+    #[test]
+    fn agent_hello_has_no_pairing_code_wire_field() {
+        let hello = WireMessage::AgentHello {
+            version: PROTOCOL_VERSION,
+            network_id: Some("test-network".into()),
+            host_id: "host-a".into(),
+            alias: "node".into(),
+            os: None,
+            http_port: None,
+            public_key: "primary".into(),
+            pairing_public_key: Some("pairing".into()),
+            capabilities: vec![],
+        };
+        let json = serde_json::to_value(hello).unwrap();
+        assert!(json["data"].get("pairing_code").is_none());
+    }
+
+    #[test]
     fn announcement_round_trips_as_json() {
         let value = DiscoveryAnnouncement {
             service: SERVICE_NAME.to_string(),
@@ -673,6 +770,7 @@ mod tests {
             port: 8787,
             http_port: None,
             public_key: "test-key".to_string(),
+            pairing_public_key: None,
             nonce: "nonce".to_string(),
             issued_at: 10,
             expires_at: 20,
@@ -832,6 +930,7 @@ mod tests {
             port: MONITOR_PORT,
             http_port: None,
             public_key: "00".repeat(32),
+            pairing_public_key: None,
             nonce: "nonce".to_string(),
             issued_at: 10,
             expires_at: 20,

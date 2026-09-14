@@ -40,15 +40,29 @@ impl MonitorTrustStore {
     }
 
     pub fn accepts(&self, announcement: &DiscoveryAnnouncement) -> bool {
-        self.monitor.as_ref().is_none_or(|trusted| {
-            trusted.host_id == announcement.host_id && trusted.public_key == announcement.public_key
+        self.monitor.as_ref().is_some_and(|trusted| {
+            trusted.host_id == announcement.host_id
+                && (trusted.public_key == announcement.public_key
+                    || announcement.pairing_public_key.as_deref()
+                        == Some(trusted.public_key.as_str()))
         })
     }
 
-    pub fn remember(&mut self, announcement: &DiscoveryAnnouncement) -> io::Result<()> {
+    pub fn public_key_for(&self, announcement: &DiscoveryAnnouncement) -> Option<&str> {
+        self.monitor
+            .as_ref()
+            .filter(|trusted| trusted.host_id == announcement.host_id)
+            .map(|trusted| trusted.public_key.as_str())
+    }
+
+    pub fn remember(
+        &mut self,
+        announcement: &DiscoveryAnnouncement,
+        handshake_public_key: &str,
+    ) -> io::Result<()> {
         self.monitor = Some(TrustedMonitor {
             host_id: announcement.host_id.clone(),
-            public_key: announcement.public_key.clone(),
+            public_key: handshake_public_key.to_string(),
         });
         self.save()
     }

@@ -13,6 +13,7 @@ CLASSES_DIR="$OUTPUT_DIR/classes"
 DEX_DIR="$OUTPUT_DIR/dex"
 CLASSES_JAR="$OUTPUT_DIR/classes.jar"
 COMPILED_RESOURCES="$OUTPUT_DIR/resources.zip"
+TEST_CLASSES_DIR="$OUTPUT_DIR/test-classes"
 
 if [[ -z "$SDK_ROOT" || ! -f "$ANDROID_JAR" ]]; then
   echo "Android SDK platform android-$COMPILE_SDK not found; enter this directory's Nix dev shell first." >&2
@@ -25,7 +26,7 @@ for tool in aapt2 d8 zipalign apksigner; do
   fi
 done
 
-mkdir -p "$CLASSES_DIR" "$DEX_DIR"
+mkdir -p "$CLASSES_DIR" "$DEX_DIR" "$TEST_CLASSES_DIR"
 rm -f "$OUTPUT_DIR/base.apk" "$OUTPUT_DIR/unsigned.apk" \
   "$OUTPUT_DIR/aligned.apk" "$OUTPUT_DIR/CodexMonitor-test.apk" \
   "$CLASSES_JAR" "$COMPILED_RESOURCES" "$DEX_DIR/classes.dex"
@@ -44,11 +45,23 @@ rm -f "$OUTPUT_DIR/base.apk" "$OUTPUT_DIR/unsigned.apk" \
   -o "$OUTPUT_DIR/base.apk" \
   "$COMPILED_RESOURCES"
 
+mapfile -t JAVA_SOURCES < <(find app/src/main/java -type f -name '*.java' -print | sort)
+if [[ ${#JAVA_SOURCES[@]} -eq 0 ]]; then
+  echo "No Java sources found under app/src/main/java." >&2
+  exit 1
+fi
 "${JAVA_HOME:+$JAVA_HOME/bin/}javac" \
   --release 8 \
   -classpath "$ANDROID_JAR" \
   -d "$CLASSES_DIR" \
-  app/src/main/java/com/codexmonitor/mobile/MainActivity.java
+  "${JAVA_SOURCES[@]}"
+
+"${JAVA_HOME:+$JAVA_HOME/bin/}javac" --release 8 \
+  -d "$TEST_CLASSES_DIR" \
+  app/src/main/java/com/codexmonitor/mobile/PairingCode.java \
+  app/src/test/java/com/codexmonitor/mobile/PairingCodeLogicTest.java
+"${JAVA_HOME:+$JAVA_HOME/bin/}java" -cp "$TEST_CLASSES_DIR" \
+  com.codexmonitor.mobile.PairingCodeLogicTest
 
 "${JAVA_HOME:+$JAVA_HOME/bin/}jar" --create --file "$CLASSES_JAR" -C "$CLASSES_DIR" .
 "$TOOLS/d8" --min-api 29 --lib "$ANDROID_JAR" --output "$DEX_DIR" "$CLASSES_JAR"

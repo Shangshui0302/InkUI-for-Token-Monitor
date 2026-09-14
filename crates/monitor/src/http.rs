@@ -1,5 +1,6 @@
 use super::discovery::DiscoveryCache;
 use super::registry::{NetworkView, Registry};
+use crate::pairing::PairingCodeManager;
 use codex_monitor_protocol::{validate_pairing_code, ControlRequest, ControlResult};
 use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
@@ -64,7 +65,7 @@ pub async fn serve(
     pair_tx: mpsc::Sender<PairCommand>,
     alias: Arc<RwLock<String>>,
     alias_path: std::path::PathBuf,
-    pairing_code: String,
+    pairing_codes: PairingCodeManager,
 ) -> Result<(), BoxError> {
     let listener = TcpListener::bind(bind).await?;
     eprintln!("codex-monitor HTTP API listening on {bind}");
@@ -79,7 +80,7 @@ pub async fn serve(
         let pair_tx = pair_tx.clone();
         let alias = Arc::clone(&alias);
         let alias_path = alias_path.clone();
-        let pairing_code = pairing_code.clone();
+        let pairing_codes = pairing_codes.clone();
         tokio::spawn(async move {
             if let Err(error) = handle(
                 stream,
@@ -92,7 +93,7 @@ pub async fn serve(
                 &pair_tx,
                 alias,
                 &alias_path,
-                &pairing_code,
+                &pairing_codes,
             )
             .await
             {
@@ -113,7 +114,7 @@ async fn handle(
     pair_tx: &mpsc::Sender<PairCommand>,
     alias: Arc<RwLock<String>>,
     alias_path: &std::path::Path,
-    pairing_code: &str,
+    pairing_codes: &PairingCodeManager,
 ) -> Result<(), BoxError> {
     let Some(request) = timeout(Duration::from_secs(5), read_request(&mut stream)).await?? else {
         return Ok(());
@@ -152,7 +153,7 @@ async fn handle(
         return handle_control(&mut stream, &request, control_token, control_tx).await;
     }
     if method == "GET" && path == "/api/v1/pairing-code" {
-        return handle_pairing_code(&mut stream, &request, control_token, pairing_code).await;
+        return handle_pairing_code(&mut stream, &request, control_token, pairing_codes).await;
     }
     if method == "POST" && path == "/api/v1/pair" {
         return handle_pair(&mut stream, &request, control_token, pair_tx).await;
@@ -263,7 +264,7 @@ async fn handle_pairing_code(
     stream: &mut TcpStream,
     request: &HttpRequest,
     token: Option<&str>,
-    pairing_code: &str,
+    pairing_codes: &PairingCodeManager,
 ) -> Result<(), BoxError> {
     let Some(expected) = token else {
         return json_response(
@@ -276,10 +277,14 @@ async fn handle_pairing_code(
     if !authorized(&request.head, expected) {
         return control_unauthorized_response(stream).await;
     }
+    let current = pairing_codes.rotate();
     json_response(
         stream,
         200,
-        &serde_json::json!({"pairingCode": pairing_code}),
+        &serde_json::json!({
+            "pairingCode": current.code,
+            "generation": current.generation
+        }),
     )
     .await
 }
@@ -742,6 +747,7 @@ fn unix_seconds() -> u64 {
 mod tests {
     use super::{parse_since, static_asset, valid_alias};
     use crate::discovery::DiscoveryCache;
+    use crate::pairing::PairingCodeManager;
     use crate::registry::Registry;
     use std::path::Path;
     use std::sync::Arc;
@@ -755,6 +761,7 @@ mod tests {
         read_token: Option<&str>,
         control_token: Option<&str>,
         alias_path: &Path,
+        pairing_codes: PairingCodeManager,
     ) -> String {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
@@ -777,7 +784,7 @@ mod tests {
                 &pair_tx,
                 Arc::new(RwLock::new("old".to_string())),
                 &alias_path,
-                "Ab3dE7qK",
+                &pairing_codes,
             )
             .await
             .unwrap();
@@ -866,6 +873,7 @@ mod tests {
         ));
         std::fs::create_dir_all(&root).unwrap();
         let alias_path = root.join("monitor.alias");
+        let pairing_codes = PairingCodeManager::new();
         let registry = Arc::new(RwLock::new(Registry::default()));
         registry.write().await.set_identity(
             "node-stable".into(),
@@ -880,6 +888,7 @@ mod tests {
             Some("read"),
             Some("control"),
             &alias_path,
+            pairing_codes.clone(),
         )
         .await;
         assert!(discoveries.starts_with("HTTP/1.1 200"));
@@ -889,7 +898,7 @@ mod tests {
             "PATCH /api/v1/identity HTTP/1.1\r\nAuthorization: Bearer read\r\nContent-Length: 2\r\n\r\n{}",
             "GET /api/v1/pairing-code HTTP/1.1\r\nAuthorization: Bearer read\r\n\r\n",
         ] {
-            let response = raw_request(request, Arc::clone(&registry), Some("read"), Some("control"), &alias_path).await;
+            let response = raw_request(request, Arc::clone(&registry), Some("read"), Some("control"), &alias_path, pairing_codes.clone()).await;
             assert!(response.starts_with("HTTP/1.1 401"), "{response}");
         }
         let disabled = raw_request(
@@ -898,6 +907,7 @@ mod tests {
             Some("read"),
             None,
             &alias_path,
+            pairing_codes.clone(),
         )
         .await;
         assert!(disabled.starts_with("HTTP/1.1 403"));
@@ -907,15 +917,36 @@ mod tests {
             Some("read"),
             Some("control"),
             &alias_path,
+            pairing_codes.clone(),
         )
         .await;
         assert!(code.starts_with("HTTP/1.1 200"));
-        assert!(code.contains(r#"{"pairingCode":"Ab3dE7qK"}"#));
+        let code_body: serde_json::Value =
+            serde_json::from_str(code.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+        assert!(code_body["pairingCode"].as_str().is_some());
+        assert!(code_body["generation"].as_u64().is_some());
+        let first_code = code_body["pairingCode"].as_str().unwrap().to_string();
+        let code_again = raw_request(
+            "GET /api/v1/pairing-code HTTP/1.1\r\nAuthorization: Bearer control\r\n\r\n",
+            Arc::clone(&registry),
+            Some("read"),
+            Some("control"),
+            &alias_path,
+            pairing_codes,
+        )
+        .await;
+        let next_body: serde_json::Value =
+            serde_json::from_str(code_again.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+        assert_ne!(first_code, next_body["pairingCode"].as_str().unwrap());
+        assert!(
+            next_body["generation"].as_u64().unwrap() > code_body["generation"].as_u64().unwrap()
+        );
 
         let invalid_pair_body = r#"{"nodeId":"node-a","pairingCode":"246810"}"#;
         let invalid_pair = raw_request(
             &format!("POST /api/v1/pair HTTP/1.1\r\nAuthorization: Bearer control\r\nContent-Length: {}\r\n\r\n{invalid_pair_body}", invalid_pair_body.len()),
             Arc::clone(&registry), Some("read"), Some("control"), &alias_path,
+            PairingCodeManager::new(),
         ).await;
         assert!(invalid_pair.starts_with("HTTP/1.1 400"), "{invalid_pair}");
         assert!(invalid_pair.contains("pairingCode must be exactly 8 ASCII letters and digits"));
@@ -924,6 +955,7 @@ mod tests {
         let rename = raw_request(
             &format!("PATCH /api/v1/identity HTTP/1.1\r\nAuthorization: Bearer control\r\nContent-Length: {}\r\n\r\n{body}", body.len()),
             Arc::clone(&registry), Some("read"), Some("control"), &alias_path,
+            PairingCodeManager::new(),
         ).await;
         assert!(rename.starts_with("HTTP/1.1 200"), "{rename}");
         assert!(rename.contains(r#""nodeId":"node-stable""#));

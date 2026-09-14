@@ -1,5 +1,5 @@
 {
-  description = "Local Nix build shell for the Codex Monitor Android WebView shell";
+  description = "Local Nix build shell for the Codex Monitor native Android peer node";
 
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
