@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      NIXPKGS_ALLOW_UNFREE: "1"
+      NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE: "1"
+    steps:
+      - name: Check out source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
+
+      - name: Install Nix
+        uses: DeterminateSystems/determinate-nix-action@e9bfc9148566ca239aef4f5cb968674de15c3c20 # v3.5.2
+
+      - name: Evaluate flake outputs
+        run: nix flake check path:. --no-build
+
+      - name: Check Rust, web, and packaging sources
+        run: |
+          nix develop path:. --command bash -euo pipefail -c '
+            cargo fmt --all -- --check
+            cargo check --workspace
+            cargo test --workspace
+            node --check web/app.js
+            node tests/pwa-auth-headers.mjs
+            node tests/pwa-visual-logic.mjs
+            node tests/quota-display.mjs
+            bash -n packaging/linux/install.sh packaging/linux/test-install.sh packaging/linux/uninstall.sh packaging/android/build.sh
+          '
+
+      - name: Build Linux and NixOS package output
+        run: nix build path:.#codex-monitor-node
+
+      - name: Build Android test APK
+        run: |
+          nix develop path:./packaging/android --impure --command bash -euo pipefail -c '
+            cd packaging/android
+            ./build.sh
+          '
