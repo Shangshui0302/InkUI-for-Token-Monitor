@@ -1,0 +1,17 @@
+[Unit]
+Description=Codex Monitor local peer node
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/codex-monitor-node
+Restart=on-failure
+RestartSec=5
+WorkingDirectory=%h/.local/share/codex-monitor
+Environment=CODEX_MONITOR_NETWORK_ID=codex-monitor-lan
+Environment=CODEX_MONITOR_HTTP_BIND=127.0.0.1:8788
+EnvironmentFile=-%h/.config/codex-monitor/codex-monitor.env
+
+[Install]
+WantedBy=default.target

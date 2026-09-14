@@ -1,8 +1,11 @@
 # Codex Monitor 完整方案
 
-状态：`m3.1-in-progress`
+状态：`baseline-archived`
 
 日期：2026-09-09
+
+> 本文保留最初的 Windows Monitor + NixOS Agent 基线。去中心化节点方案已在
+> [`002-decentralized-mesh.md`](002-decentralized-mesh.md) 更新，后续实现以新方案为准。
 
 ## 1. 目标和边界
 

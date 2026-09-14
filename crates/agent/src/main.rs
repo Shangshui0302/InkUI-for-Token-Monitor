@@ -2,16 +2,18 @@ mod trust;
 
 use codex_monitor_codex_client::CodexCollector;
 use codex_monitor_protocol::{
-    default_identity_path, discovery_interface_v4, pairing_message, CollectorStatus,
-    DiscoveryAnnouncement, Identity, StateSnapshot, WireMessage, DISCOVERY_GROUP_V4,
-    DISCOVERY_PORT, HANDSHAKE_TIMEOUT_SECS, HEARTBEAT_INTERVAL_SECS, PROTOCOL_VERSION,
-    SERVICE_NAME, STATE_SNAPSHOT_CAPABILITY,
+    default_identity_path, discovery_interface_v4, pairing_message, validate_pairing_code,
+    CollectorStatus, DiscoveryAnnouncement, Identity, StateSnapshot, WireMessage,
+    DISCOVERY_GROUP_V4, DISCOVERY_PORT, HANDSHAKE_TIMEOUT_SECS, HEARTBEAT_INTERVAL_SECS,
+    PROTOCOL_VERSION, SERVICE_NAME, STATE_SNAPSHOT_CAPABILITY,
 };
 use std::env;
 use std::error::Error;
 use std::net::{Ipv4Addr, SocketAddr, UdpSocket as StdUdpSocket};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tokio::io::{AsyncBufRead, AsyncBufReadExt, AsyncWrite, AsyncWriteExt, BufReader};
+use tokio::io::{
+    AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWrite, AsyncWriteExt, BufReader,
+};
 use tokio::net::{TcpStream, UdpSocket};
 use tokio::sync::mpsc;
 use tokio::time::{sleep, timeout};
@@ -23,7 +25,17 @@ type BoxError = Box<dyn Error + Send + Sync>;
 async fn main() -> Result<(), BoxError> {
     let identity = Identity::load_or_create(&default_identity_path("agent"))?;
     let alias = env::var("CODEX_MONITOR_ALIAS").unwrap_or_else(|_| local_hostname());
-    let pairing_code = env::var("CODEX_MONITOR_PAIR_CODE").ok();
+    let pairing_code = match env::var("CODEX_MONITOR_PAIR_CODE") {
+        Ok(value) => {
+            validate_pairing_code(&value)
+                .map_err(|reason| format!("CODEX_MONITOR_PAIR_CODE {reason}"))?;
+            Some(value)
+        }
+        Err(env::VarError::NotPresent) => None,
+        Err(error) => {
+            return Err(format!("CODEX_MONITOR_PAIR_CODE is not valid UTF-8: {error}").into());
+        }
+    };
     let mut monitor_trust = MonitorTrustStore::load(default_monitor_trust_path())?;
 
     eprintln!(
@@ -82,6 +94,10 @@ async fn main() -> Result<(), BoxError> {
             &alias,
             pairing_code.as_deref(),
             announcement
+                .network_id
+                .as_deref()
+                .unwrap_or("codex-monitor-lan"),
+            announcement
                 .capabilities
                 .iter()
                 .any(|value| value == STATE_SNAPSHOT_CAPABILITY),
@@ -108,6 +124,7 @@ async fn connect_and_run(
     identity: &Identity,
     alias: &str,
     pairing_code: Option<&str>,
+    network_id: &str,
     supports_state: bool,
     monitor_trust: &mut MonitorTrustStore,
 ) -> Result<(), BoxError> {
@@ -122,8 +139,11 @@ async fn connect_and_run(
         &mut write_half,
         &WireMessage::AgentHello {
             version: PROTOCOL_VERSION,
+            network_id: Some(network_id.to_string()),
             host_id: identity.host_id(),
             alias: alias.to_string(),
+            os: Some(std::env::consts::OS.to_string()),
+            http_port: None,
             public_key: identity.public_key_hex(),
             pairing_code: pairing_code.map(str::to_string),
             capabilities,
@@ -177,7 +197,16 @@ async fn connect_and_run(
     .await??
     .ok_or("monitor closed after challenge")?
     {
-        WireMessage::PairAccepted { host_id } if host_id == identity.host_id() => {
+        WireMessage::PairAccepted {
+            host_id,
+            network_id: accepted_network_id,
+        } if host_id == identity.host_id() => {
+            if accepted_network_id
+                .as_deref()
+                .is_some_and(|value| !value.is_empty() && value != network_id)
+            {
+                return Err("monitor accepted a different network id".into());
+            }
             monitor_trust.remember(announcement)?;
             eprintln!("paired with monitor {monitor_addr}");
         }
@@ -191,6 +220,7 @@ async fn connect_and_run(
             state_tx,
             identity.host_id(),
             alias.to_string(),
+            network_id.to_string(),
         ))
     });
     let mut heartbeat = tokio::time::interval(Duration::from_secs(HEARTBEAT_INTERVAL_SECS));
@@ -228,7 +258,12 @@ async fn connect_and_run(
     result
 }
 
-async fn run_state_collector(sender: mpsc::Sender<StateSnapshot>, host_id: String, alias: String) {
+async fn run_state_collector(
+    sender: mpsc::Sender<StateSnapshot>,
+    host_id: String,
+    alias: String,
+    network_id: String,
+) {
     let mut sequence: u64 = 0;
     loop {
         let mut collector = match CodexCollector::spawn().await {
@@ -236,7 +271,14 @@ async fn run_state_collector(sender: mpsc::Sender<StateSnapshot>, host_id: Strin
             Err(error) => {
                 sequence = sequence.saturating_add(1);
                 if sender
-                    .send(unavailable_snapshot(&host_id, &alias, sequence, &error))
+                    .send(unavailable_snapshot(
+                        &host_id,
+                        &alias,
+                        &network_id,
+                        sequence,
+                        &error,
+                        None,
+                    ))
                     .await
                     .is_err()
                 {
@@ -255,14 +297,25 @@ async fn run_state_collector(sender: mpsc::Sender<StateSnapshot>, host_id: Strin
                 .await
             {
                 Ok(snapshot) => {
+                    let mut snapshot = snapshot;
+                    snapshot.network_id = Some(network_id.clone());
+                    snapshot.source_node_id = Some(host_id.clone());
                     if sender.send(snapshot).await.is_err() {
                         return;
                     }
                     sleep(Duration::from_secs(10)).await;
                 }
                 Err(error) => {
+                    let previous = collector.last_snapshot();
                     if sender
-                        .send(unavailable_snapshot(&host_id, &alias, sequence, &error))
+                        .send(unavailable_snapshot(
+                            &host_id,
+                            &alias,
+                            &network_id,
+                            sequence,
+                            &error,
+                            previous,
+                        ))
                         .await
                         .is_err()
                     {
@@ -276,17 +329,36 @@ async fn run_state_collector(sender: mpsc::Sender<StateSnapshot>, host_id: Strin
     }
 }
 
-fn unavailable_snapshot(host_id: &str, alias: &str, sequence: u64, error: &str) -> StateSnapshot {
-    StateSnapshot {
+fn unavailable_snapshot(
+    host_id: &str,
+    alias: &str,
+    network_id: &str,
+    sequence: u64,
+    error: &str,
+    previous: Option<&StateSnapshot>,
+) -> StateSnapshot {
+    let mut snapshot = previous.cloned().unwrap_or_else(|| StateSnapshot {
         host_id: host_id.to_string(),
         alias: alias.to_string(),
+        os: Some(std::env::consts::OS.to_string()),
         sequence,
         captured_at: unix_seconds(),
         collector_status: CollectorStatus::Unavailable,
-        error: Some(error.chars().take(256).collect()),
+        error: None,
         sessions: Vec::new(),
         account: None,
-    }
+        network_id: None,
+        source_node_id: None,
+    });
+    snapshot.host_id = host_id.to_string();
+    snapshot.alias = alias.to_string();
+    snapshot.sequence = sequence;
+    snapshot.captured_at = unix_seconds();
+    snapshot.collector_status = CollectorStatus::Unavailable;
+    snapshot.error = Some(error.chars().take(256).collect());
+    snapshot.network_id = Some(network_id.to_string());
+    snapshot.source_node_id = Some(host_id.to_string());
+    snapshot
 }
 
 async fn send_wire<W>(writer: &mut W, message: &WireMessage) -> Result<(), BoxError>
@@ -305,7 +377,10 @@ where
     R: AsyncBufRead + Unpin,
 {
     let mut line = Vec::new();
-    let read = reader.read_until(b'\n', &mut line).await?;
+    let read = reader
+        .take((codex_monitor_protocol::MAX_WIRE_FRAME_BYTES + 1) as u64)
+        .read_until(b'\n', &mut line)
+        .await?;
     if read == 0 {
         return Ok(None);
     }

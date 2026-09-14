@@ -1,10 +1,11 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="normal" data-accent="green">
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="theme-color" content="#111111">
+    <meta name="theme-color" content="#f5f3ed">
     <meta name="description" content="Codex 会话和账户额度监控台">
+    <link rel="icon" href="/app-icon.png" type="image/png">
     <link rel="manifest" href="/manifest.webmanifest">
     <link rel="stylesheet" href="/styles.css">
     <title>Codex Monitor</title>
@@ -12,20 +13,27 @@
   <body>
     <main class="shell">
       <header class="topbar">
-        <div>
-          <p class="eyebrow">CODEX MONITOR</p>
-          <h1>监控台</h1>
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true"><img class="brand-icon" src="/app-icon.png" alt=""></div>
+          <div class="brand-copy">
+            <h1>监控台</h1>
+            <div class="connection-line" aria-live="polite">
+              <span id="connection-status" class="connection-title connection-unknown">连接中</span>
+              <span class="connection-dot" aria-hidden="true">·</span>
+              <span id="last-updated" class="connection-detail">正在读取 Monitor 状态…</span>
+              <span id="revision" class="header-revision"></span>
+            </div>
+          </div>
         </div>
-        <button id="refresh" class="refresh" type="button">立即刷新</button>
+        <div class="topbar-actions">
+          <button id="refresh" class="icon-button refresh" type="button" aria-label="刷新状态" title="刷新状态">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M20 20v-4h-4"/></svg>
+          </button>
+          <button id="settings-toggle" class="icon-button settings-button" type="button" aria-expanded="false" aria-controls="settings-backdrop" aria-label="打开设置" title="设置">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 2h4l.6 2.2 1.4.6 2-1.1 2.3 2.3-1.1 2 .6 1.4L22 10v4l-2.2.6-.6 1.4 1.1 2-2.3 2.3-2-1.1-1.4.6L14 22h-4l-.6-2.2-1.4-.6-2 1.1L3.7 18l1.1-2-.6-1.4L2 14v-4l2.2-.6.6-1.4-1.1-2L6 3.7l2 1.1 1.4-.6L10 2Z"/><circle cx="12" cy="12" r="3"/></svg>
+          </button>
+        </div>
       </header>
-
-      <section class="connection card" aria-live="polite">
-        <div>
-          <h2 id="connection-status">连接中</h2>
-          <p id="last-updated">正在读取 Monitor 状态…</p>
-        </div>
-        <p id="revision" class="revision"></p>
-      </section>
 
       <nav class="view-nav" aria-label="监控页面" role="tablist">
         <button class="view-tab is-active" type="button" role="tab" aria-selected="true" data-view="overview">总览</button>
@@ -40,7 +48,7 @@
 
       <section id="view-accounts" class="view" role="tabpanel" hidden>
         <div class="section-heading">
-          <h2>账户额度</h2>
+          <h2>额度</h2>
           <span id="account-count" class="count">0</span>
         </div>
         <div id="accounts" class="stack">
@@ -54,7 +62,7 @@
 
       <section id="view-sessions" class="view" role="tabpanel" hidden>
         <div class="section-heading">
-          <h2>开发主机与会话</h2>
+          <h2>会话</h2>
           <span id="host-count" class="count">0</span>
         </div>
         <div id="hosts" class="stack">
@@ -62,6 +70,120 @@
         </div>
       </section>
     </main>
+
+    <div id="settings-backdrop" class="settings-backdrop" hidden>
+      <section id="settings-panel" class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabindex="-1">
+        <header class="settings-heading">
+          <div>
+            <h2 id="settings-title">设置</h2>
+            <p class="settings-subtitle">显示、设备与连接权限</p>
+          </div>
+          <button id="settings-close" class="icon-button" type="button" aria-label="关闭设置" title="关闭设置">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
+        </header>
+        <nav class="settings-tabs" aria-label="设置分类" role="tablist">
+          <button class="settings-tab is-active" type="button" role="tab" aria-selected="true" aria-controls="settings-display" data-settings-tab="display">显示</button>
+          <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-device" data-settings-tab="device">设备</button>
+          <button class="settings-tab" type="button" role="tab" aria-selected="false" aria-controls="settings-advanced" data-settings-tab="advanced">高级</button>
+        </nav>
+
+        <div id="settings-display" class="settings-tabpanel is-active" role="tabpanel">
+          <div class="settings-block">
+            <h3>显示模式</h3>
+            <label class="select-field" for="theme-select">
+              <span>设备主题</span>
+              <select id="theme-select" name="theme">
+                <option value="normal">Normal</option>
+                <option value="eink">Eink</option>
+              </select>
+            </label>
+          </div>
+          <div class="settings-block">
+            <h3>主题色</h3>
+            <div id="accent-options" class="accent-options" role="radiogroup" aria-label="主题色"></div>
+          </div>
+          <div id="android-shell-settings" class="settings-block native-shell-settings" hidden>
+            <h3>Android 外观</h3>
+            <label class="toggle-row" for="hide-status-bar">
+              <span><strong>隐藏状态栏</strong><small>从屏幕边缘滑动可临时显示</small></span>
+              <input id="hide-status-bar" type="checkbox">
+            </label>
+            <label class="toggle-row" for="hide-navigation-bar">
+              <span><strong>隐藏导航栏</strong><small>使用沉浸式粘性模式</small></span>
+              <input id="hide-navigation-bar" type="checkbox">
+            </label>
+            <button id="android-node-address" class="button button-quiet" type="button">更改 APK 页面地址</button>
+          </div>
+        </div>
+
+        <div id="settings-device" class="settings-tabpanel" role="tabpanel" hidden>
+          <div class="settings-block">
+            <div class="block-heading">
+              <h3>当前节点</h3>
+              <span id="identity-status" class="meta"></span>
+            </div>
+            <form id="identity-form" class="identity-form">
+              <label class="form-field" for="identity-alias-input">
+                <span>当前节点昵称</span>
+                <input id="identity-alias-input" name="alias" type="text" maxlength="64" autocomplete="off">
+              </label>
+              <p id="identity-os" class="device-system">系统未知</p>
+              <button class="button button-primary" type="submit">保存昵称</button>
+            </form>
+            <div class="pairing-code-local">
+              <button id="pairing-code-toggle" class="small-button" type="button">显示当前节点配对码</button>
+              <div id="pairing-code-panel" class="pairing-code-panel" hidden>
+                <code id="pairing-code-value"></code>
+                <button id="pairing-code-hide" class="small-button" type="button">隐藏</button>
+              </div>
+            </div>
+          </div>
+          <div class="settings-block">
+            <div class="block-heading">
+              <h3>附近设备（其他电脑）</h3>
+              <button id="discoveries-refresh" class="small-button" type="button">刷新</button>
+            </div>
+            <p class="meta">这里查找当前节点附近的其他电脑，当前入口显示在下方。Poke3 等查看设备不会重复列出。</p>
+            <p class="meta">配对码必须恰好 8 位，由数字及大小写英文字母组成，并区分大小写。</p>
+            <p id="discoveries-status" class="meta">正在读取发现…</p>
+            <div id="discoveries" class="device-list"></div>
+          </div>
+          <div class="settings-block">
+            <div class="block-heading"><h3>当前入口与已连接设备</h3></div>
+            <div id="connected-devices" class="device-list"></div>
+          </div>
+          <div id="device-pager" class="pager device-pager" hidden></div>
+        </div>
+
+        <div id="settings-advanced" class="settings-tabpanel" role="tabpanel" hidden>
+          <div class="settings-block">
+            <h3>连接</h3>
+            <form id="endpoint-form" class="endpoint-form">
+              <label class="form-field form-field-wide" for="endpoint-input">
+                <span>HTTP 地址</span>
+                <input id="endpoint-input" name="endpoint" type="url" inputmode="url" autocomplete="url" spellcheck="false">
+              </label>
+              <label class="form-field" for="token-input">
+                <span>只读 token</span>
+                <input id="token-input" name="token" type="password" autocomplete="off" spellcheck="false" placeholder="可选">
+              </label>
+              <label class="form-field" for="control-token-input">
+                <span>控制 token</span>
+                <input id="control-token-input" name="control-token" type="password" autocomplete="off" spellcheck="false" placeholder="管理操作">
+              </label>
+              <div class="form-actions">
+                <button class="button button-primary endpoint-button" type="submit">连接节点</button>
+                <button id="endpoint-reset" class="button button-quiet endpoint-button" type="button">当前节点</button>
+              </div>
+            </form>
+            <p class="setting-note">只读 token 仅用于读取；配对和改名使用独立控制 token，不会自动授予权限。</p>
+            <p id="offline-availability-note" class="setting-note" hidden>当前页面通过普通 HTTP 打开，关闭后离线重开可能失败。需要离线打开时，请使用 HTTPS 入口。</p>
+          </div>
+        </div>
+      </section>
+    </div>
+
     <noscript>需要启用 JavaScript 才能读取 Monitor 状态。</noscript>
     <script type="module" src="/app.js"></script>
   </body>

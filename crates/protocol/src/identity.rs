@@ -1,9 +1,12 @@
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use rand::rngs::OsRng;
+use serde::Serialize;
 use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+
+use crate::MessageEnvelope;
 
 /// A locally stored Ed25519 identity. The private key never belongs in a wire message.
 pub struct Identity {
@@ -43,8 +46,14 @@ impl Identity {
     }
 
     pub fn host_id(&self) -> String {
-        let public_key = self.public_key_hex();
-        format!("ed25519:{}", &public_key[..16])
+        Self::host_id_from_public_key(&self.public_key_hex()).expect("identity public key is valid")
+    }
+
+    pub fn host_id_from_public_key(public_key: &str) -> Option<String> {
+        if public_key.len() != 64 || hex::decode(public_key).ok()?.len() != 32 {
+            return None;
+        }
+        Some(format!("ed25519:{}", &public_key[..16]))
     }
 
     pub fn sign_hex(&self, message: &[u8]) -> String {
@@ -69,6 +78,46 @@ impl Identity {
         };
         verifying_key.verify(message, &signature).is_ok()
     }
+
+    /// Sign the canonical envelope bytes, leaving the envelope metadata and
+    /// payload visible to receivers while excluding the signature itself.
+    pub fn sign_envelope<T: Serialize>(
+        &self,
+        envelope: &mut MessageEnvelope<T>,
+    ) -> Result<(), serde_json::Error> {
+        envelope.signature = Some(self.sign_hex(&envelope.signing_bytes()?));
+        Ok(())
+    }
+
+    pub fn signed_envelope<T: Serialize>(
+        &self,
+        mut envelope: MessageEnvelope<T>,
+    ) -> Result<MessageEnvelope<T>, serde_json::Error> {
+        self.sign_envelope(&mut envelope)?;
+        Ok(envelope)
+    }
+
+    /// Verify an envelope against the public key belonging to its sender.
+    pub fn verify_envelope<T: Serialize>(public_key: &str, envelope: &MessageEnvelope<T>) -> bool {
+        let Some(signature) = envelope.signature.as_deref() else {
+            return false;
+        };
+        let Ok(message) = envelope.signing_bytes() else {
+            return false;
+        };
+        Self::verify_hex(public_key, &message, signature)
+    }
+}
+
+pub fn sign_envelope<T: Serialize>(
+    identity: &Identity,
+    envelope: &mut MessageEnvelope<T>,
+) -> Result<(), serde_json::Error> {
+    identity.sign_envelope(envelope)
+}
+
+pub fn verify_envelope<T: Serialize>(public_key: &str, envelope: &MessageEnvelope<T>) -> bool {
+    Identity::verify_envelope(public_key, envelope)
 }
 
 pub fn pairing_message(challenge: &str, monitor_id: &str, host_id: &str) -> Vec<u8> {
@@ -127,5 +176,40 @@ mod tests {
             b"different",
             &signature
         ));
+    }
+
+    #[test]
+    fn signs_and_verifies_envelopes_without_signature_field() {
+        let key = SigningKey::from_bytes(&[7u8; 32]);
+        let identity = Identity { signing_key: key };
+        let mut envelope = MessageEnvelope::new(
+            "state_snapshot",
+            "network-1",
+            identity.host_id(),
+            3,
+            10,
+            Some("request-1".to_string()),
+            serde_json::json!({"sourceNodeId": "node-a"}),
+        );
+
+        identity
+            .sign_envelope(&mut envelope)
+            .expect("sign envelope");
+        assert!(envelope.validate().is_ok());
+        assert!(Identity::verify_envelope(
+            &identity.public_key_hex(),
+            &envelope
+        ));
+
+        envelope.sequence = 4;
+        assert!(!Identity::verify_envelope(
+            &identity.public_key_hex(),
+            &envelope
+        ));
+    }
+
+    #[test]
+    fn rejects_non_hex_public_keys_before_slicing() {
+        assert!(Identity::host_id_from_public_key(&"é".repeat(32)).is_none());
     }
 }

@@ -1,11 +1,11 @@
 use codex_monitor_protocol::{
     AccountState, CollectorStatus, CreditBalance, DailyUsageBucket, RateLimitBucket,
-    RateLimitWindow, SessionState, StateSnapshot, MAX_STATE_DAILY_USAGE,
+    RateLimitWindow, SessionState, StateSnapshot, MAX_STATE_DAILY_USAGE, MAX_STATE_SESSIONS,
 };
 use serde_json::{json, Map, Value};
 use std::env;
 use std::process::Stdio;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout, Command};
 use tokio::time::{timeout, Duration};
 
@@ -18,6 +18,7 @@ pub struct CodexCollector {
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
     next_id: u64,
+    last_snapshot: Option<StateSnapshot>,
 }
 
 impl CodexCollector {
@@ -49,6 +50,7 @@ impl CodexCollector {
             stdin,
             stdout: BufReader::new(stdout),
             next_id: 1,
+            last_snapshot: None,
         };
         collector.initialize().await?;
         Ok(collector)
@@ -73,7 +75,11 @@ impl CodexCollector {
             )
             .await
         {
-            Ok(value) => Some(parse_sessions(&value)),
+            Ok(value) => {
+                let mut sessions = parse_sessions(&value);
+                self.enrich_turn_ids(&mut sessions).await;
+                Some(sessions)
+            }
             Err(error) => {
                 errors.push(format!("thread/list: {error}"));
                 None
@@ -119,6 +125,7 @@ impl CodexCollector {
             usage.as_ref(),
             captured_at,
         );
+        let previous_snapshot = self.last_snapshot.as_ref();
         let collector_status = if account
             .as_ref()
             .is_some_and(|value| value.requires_openai_auth && value.auth_mode.is_none())
@@ -130,16 +137,53 @@ impl CodexCollector {
             CollectorStatus::Degraded
         };
 
-        Ok(StateSnapshot {
+        let snapshot = StateSnapshot {
             host_id: host_id.to_string(),
             alias: alias.to_string(),
+            os: Some(std::env::consts::OS.to_string()),
             sequence,
             captured_at,
             collector_status,
             error: (!errors.is_empty()).then(|| truncate(&errors.join("; "), 1024)),
-            sessions: threads.unwrap_or_default(),
-            account,
-        })
+            sessions: threads.unwrap_or_else(|| {
+                previous_snapshot
+                    .map(|snapshot| snapshot.sessions.clone())
+                    .unwrap_or_default()
+            }),
+            account: carry_forward_account(
+                account,
+                previous_snapshot.and_then(|snapshot| snapshot.account.as_ref()),
+                account_result.is_none(),
+                rate_limits.is_none(),
+                usage.is_none(),
+            ),
+            network_id: None,
+            source_node_id: Some(host_id.to_string()),
+        };
+        self.last_snapshot = Some(snapshot.clone());
+        Ok(snapshot)
+    }
+
+    /// Interrupt one in-progress Codex turn. The app-server schema requires
+    /// both identifiers; callers must obtain the turn id from a live thread
+    /// read before exposing this action to a remote client.
+    pub async fn interrupt(&mut self, thread_id: &str, turn_id: &str) -> Result<(), String> {
+        if thread_id.is_empty() || turn_id.is_empty() {
+            return Err("thread id and turn id are required".to_string());
+        }
+        self.request(
+            "turn/interrupt",
+            Some(json!({
+                "threadId": thread_id,
+                "turnId": turn_id
+            })),
+        )
+        .await
+        .map(|_| ())
+    }
+
+    pub fn last_snapshot(&self) -> Option<&StateSnapshot> {
+        self.last_snapshot.as_ref()
     }
 
     async fn initialize(&mut self) -> Result<(), String> {
@@ -155,6 +199,31 @@ impl CodexCollector {
         )
         .await?;
         self.send_notification("initialized", Some(json!({}))).await
+    }
+
+    async fn enrich_turn_ids(&mut self, sessions: &mut [SessionState]) {
+        for session in sessions
+            .iter_mut()
+            .filter(|session| {
+                session.turn_id.is_none() && matches!(session.status.as_str(), "active" | "waiting")
+            })
+            // ponytail: bound turn lookups so a slow app-server cannot stall a
+            // snapshot for every listed thread; raise this when bulk control is needed.
+            .take(2)
+        {
+            let result = self
+                .request(
+                    "thread/read",
+                    Some(json!({
+                        "threadId": session.thread_id,
+                        "includeTurns": true
+                    })),
+                )
+                .await;
+            if let Ok(value) = result {
+                session.turn_id = latest_in_progress_turn_id(&value);
+            }
+        }
     }
 
     async fn send_notification(
@@ -202,8 +271,8 @@ impl CodexCollector {
     async fn read_response(&mut self, expected_id: u64) -> Result<Value, String> {
         loop {
             let mut line = Vec::new();
-            let read = self
-                .stdout
+            let read = (&mut self.stdout)
+                .take((MAX_APP_SERVER_LINE_BYTES + 1) as u64)
                 .read_until(b'\n', &mut line)
                 .await
                 .map_err(|error| format!("read app-server response: {error}"))?;
@@ -256,9 +325,16 @@ fn parse_sessions(result: &Value) -> Vec<SessionState> {
                 .get("id")
                 .or_else(|| item.get("threadId"))
                 .or_else(|| item.get("sessionId"))
-                .and_then(Value::as_str)?;
+                .and_then(Value::as_str)
+                .filter(|value| !value.is_empty())?;
             Some(SessionState {
                 thread_id: truncate(thread_id, 128),
+                turn_id: item
+                    .get("turnId")
+                    .or_else(|| item.get("activeTurnId"))
+                    .and_then(Value::as_str)
+                    .filter(|value| !value.is_empty())
+                    .map(|value| truncate(value, 128)),
                 title: item
                     .get("name")
                     .or_else(|| item.get("title"))
@@ -274,6 +350,7 @@ fn parse_sessions(result: &Value) -> Vec<SessionState> {
                 updated_at: number(item.get("updatedAt")),
             })
         })
+        .take(MAX_STATE_SESSIONS)
         .collect()
 }
 
@@ -291,7 +368,8 @@ fn parse_status(value: Option<&Value>) -> String {
         .get("type")
         .and_then(Value::as_str)
         .unwrap_or("unknown");
-    if status == "active"
+    let normalized = normalize_status(status);
+    if normalized == "active"
         && object
             .get("activeFlags")
             .and_then(Value::as_array)
@@ -302,16 +380,29 @@ fn parse_status(value: Option<&Value>) -> String {
     {
         return "waiting".to_string();
     }
-    normalize_status(status)
+    normalized
+}
+
+fn latest_in_progress_turn_id(result: &Value) -> Option<String> {
+    result
+        .get("thread")
+        .and_then(|thread| thread.get("turns"))
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .rev()
+        .find(|turn| turn.get("status").and_then(Value::as_str) == Some("inProgress"))
+        .and_then(|turn| turn.get("id").and_then(Value::as_str))
+        .map(|value| truncate(value, 128))
 }
 
 fn normalize_status(status: &str) -> String {
     match status.to_ascii_lowercase().as_str() {
-        "active" | "running" => "active",
-        "idle" => "idle",
+        "active" | "running" | "inprogress" | "in_progress" => "active",
+        "idle" | "completed" | "complete" | "done" => "idle",
         "notloaded" | "not_loaded" => "unknown",
         "waiting" | "wait" => "waiting",
-        "error" | "systemerror" | "system_error" => "error",
+        "error" | "failed" | "failure" | "systemerror" | "system_error" => "error",
         _ => "unknown",
     }
     .to_string()
@@ -373,6 +464,68 @@ fn merge_account(
     })
 }
 
+fn carry_forward_account(
+    current: Option<AccountState>,
+    previous: Option<&AccountState>,
+    account_unavailable: bool,
+    rate_limits_unavailable: bool,
+    usage_unavailable: bool,
+) -> Option<AccountState> {
+    let Some(previous) = previous else {
+        return current;
+    };
+    let Some(mut current) = current else {
+        return (account_unavailable || rate_limits_unavailable || usage_unavailable)
+            .then(|| previous.clone());
+    };
+    if current.requires_openai_auth {
+        return Some(current);
+    }
+
+    let same_account = account_unavailable
+        || match (&current.account_key, &previous.account_key) {
+            (Some(current), Some(previous)) => current == previous,
+            (None, None) => {
+                current.auth_mode == previous.auth_mode && current.plan_type == previous.plan_type
+            }
+            _ => false,
+        };
+    if !same_account {
+        return Some(current);
+    }
+
+    if account_unavailable {
+        if current.account_key.is_none() {
+            current.account_key = previous.account_key.clone();
+        }
+        if current.auth_mode.is_none() {
+            current.auth_mode = previous.auth_mode.clone();
+        }
+        if current.plan_type.is_none() {
+            current.plan_type = previous.plan_type.clone();
+        }
+        current.requires_openai_auth = previous.requires_openai_auth;
+    }
+    if rate_limits_unavailable {
+        current.rate_limits = previous.rate_limits.clone();
+        if current.reset_credits_available.is_none() {
+            current.reset_credits_available = previous.reset_credits_available;
+        }
+    }
+    if usage_unavailable {
+        current.usage_lifetime_tokens = current
+            .usage_lifetime_tokens
+            .or(previous.usage_lifetime_tokens);
+        current.usage_peak_daily_tokens = current
+            .usage_peak_daily_tokens
+            .or(previous.usage_peak_daily_tokens);
+        if current.daily_usage.is_empty() {
+            current.daily_usage = previous.daily_usage.clone();
+        }
+    }
+    Some(current)
+}
+
 fn parse_daily_usage(result: &Value) -> Vec<DailyUsageBucket> {
     let mut buckets = result
         .get("dailyUsageBuckets")
@@ -404,18 +557,18 @@ fn valid_date(value: &str) -> bool {
         return false;
     }
     let bytes = value.as_bytes();
-    bytes[4] == b'-'
-        && bytes[7] == b'-'
-        && bytes
+    if bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || !bytes
             .iter()
             .enumerate()
             .all(|(index, byte)| matches!(index, 4 | 7) || byte.is_ascii_digit())
-        && value[5..7]
-            .parse::<u8>()
-            .is_ok_and(|month| (1..=12).contains(&month))
-        && value[8..10]
-            .parse::<u8>()
-            .is_ok_and(|day| (1..=31).contains(&day))
+    {
+        return false;
+    }
+    let month = u16::from(bytes[5] - b'0') * 10 + u16::from(bytes[6] - b'0');
+    let day = u16::from(bytes[8] - b'0') * 10 + u16::from(bytes[9] - b'0');
+    (1..=12).contains(&month) && (1..=31).contains(&day)
 }
 
 fn parse_rate_limits(result: &Value) -> (Vec<RateLimitBucket>, Option<u64>) {
@@ -431,10 +584,12 @@ fn parse_rate_limits(result: &Value) -> (Vec<RateLimitBucket>, Option<u64>) {
         .unwrap_or_default();
     if buckets.is_empty() {
         if let Some(value) = result.get("rateLimits") {
-            if let Some(limit_id) = value.get("limitId").and_then(Value::as_str) {
-                if let Some(bucket) = parse_bucket(limit_id, value) {
-                    buckets.push(bucket);
-                }
+            let limit_id = value
+                .get("limitId")
+                .and_then(Value::as_str)
+                .unwrap_or("legacy");
+            if let Some(bucket) = parse_bucket(limit_id, value) {
+                buckets.push(bucket);
             }
         }
     }
@@ -447,6 +602,12 @@ fn parse_rate_limits(result: &Value) -> (Vec<RateLimitBucket>, Option<u64>) {
 }
 
 fn parse_bucket(limit_id: &str, value: &Value) -> Option<RateLimitBucket> {
+    if !value.is_object() {
+        return None;
+    }
+    let limit_id = (!limit_id.is_empty())
+        .then_some(limit_id)
+        .unwrap_or("legacy");
     Some(RateLimitBucket {
         limit_id: truncate(limit_id, 128),
         limit_name: value
@@ -534,6 +695,7 @@ mod tests {
         let result = json!({
             "data": [{
                 "id": "thr-1",
+                "turnId": "turn-1",
                 "name": "Demo",
                 "preview": "last message",
                 "status": {"type": "active", "activeFlags": ["waitingOnApproval"]},
@@ -545,6 +707,48 @@ mod tests {
         assert_eq!(
             parse_sessions(&result)[0].last_output_summary.as_deref(),
             Some("last message")
+        );
+        assert_eq!(
+            parse_sessions(&result)[0].turn_id.as_deref(),
+            Some("turn-1")
+        );
+        assert_eq!(normalize_status("inProgress"), "active");
+        assert_eq!(normalize_status("completed"), "idle");
+        assert_eq!(normalize_status("failed"), "error");
+    }
+
+    #[test]
+    fn bounds_sessions_when_app_server_ignores_requested_limit() {
+        let mut data = vec![
+            json!({}),
+            json!({"id": 42}),
+            json!({"id": ""}),
+            json!({"id": "thread-empty-turn", "turnId": ""}),
+        ];
+        data.extend(
+            (0..MAX_STATE_SESSIONS + 1).map(|index| json!({ "id": format!("thread-{index}") })),
+        );
+        let result = json!({
+            "data": data
+        });
+        let sessions = parse_sessions(&result);
+        assert_eq!(sessions.len(), MAX_STATE_SESSIONS);
+        assert_eq!(sessions[0].turn_id, None);
+    }
+
+    #[test]
+    fn finds_latest_in_progress_turn_for_active_thread() {
+        let result = json!({
+            "thread": {
+                "turns": [
+                    {"id": "turn-old", "status": "completed"},
+                    {"id": "turn-current", "status": "inProgress"}
+                ]
+            }
+        });
+        assert_eq!(
+            latest_in_progress_turn_id(&result).as_deref(),
+            Some("turn-current")
         );
     }
 
@@ -579,6 +783,71 @@ mod tests {
             Some("0")
         );
         assert_eq!(reset, Some(1));
+    }
+
+    #[test]
+    fn keeps_legacy_single_bucket_without_limit_id() {
+        let result = json!({
+            "rateLimits": {
+                "primary": {"usedPercent": 12, "resetsAt": 100}
+            }
+        });
+        let (buckets, reset) = parse_rate_limits(&result);
+        assert_eq!(reset, None);
+        assert_eq!(buckets.len(), 1);
+        assert_eq!(buckets[0].limit_id, "legacy");
+        assert_eq!(
+            buckets[0].primary.as_ref().and_then(|w| w.used_percent),
+            Some(12.0)
+        );
+    }
+
+    #[test]
+    fn carries_forward_only_unavailable_account_sections() {
+        let previous = AccountState {
+            account_key: Some("same".to_string()),
+            auth_mode: Some("chatgpt".to_string()),
+            plan_type: Some("plus".to_string()),
+            requires_openai_auth: false,
+            rate_limits: vec![RateLimitBucket {
+                limit_id: "codex".to_string(),
+                limit_name: None,
+                primary: Some(RateLimitWindow {
+                    used_percent: Some(42.0),
+                    window_duration_mins: Some(300),
+                    resets_at: Some(100),
+                }),
+                secondary: None,
+                credits: None,
+                plan_type: Some("plus".to_string()),
+                rate_limit_reached_type: None,
+            }],
+            reset_credits_available: Some(1),
+            usage_lifetime_tokens: Some(100),
+            usage_peak_daily_tokens: Some(20),
+            daily_usage: vec![DailyUsageBucket {
+                start_date: "2026-09-10".to_string(),
+                tokens: 20,
+            }],
+            observed_at: 10,
+        };
+        let current = AccountState {
+            account_key: Some("same".to_string()),
+            auth_mode: Some("chatgpt".to_string()),
+            plan_type: Some("plus".to_string()),
+            requires_openai_auth: false,
+            rate_limits: Vec::new(),
+            reset_credits_available: None,
+            usage_lifetime_tokens: None,
+            usage_peak_daily_tokens: None,
+            daily_usage: Vec::new(),
+            observed_at: 11,
+        };
+        let merged = carry_forward_account(Some(current), Some(&previous), false, true, true)
+            .expect("merged account");
+        assert_eq!(merged.rate_limits, previous.rate_limits);
+        assert_eq!(merged.daily_usage, previous.daily_usage);
+        assert_eq!(merged.observed_at, 11);
     }
 
     #[test]

@@ -9,7 +9,7 @@
 
 验收：`cargo check --workspace` 和协议 round-trip 测试通过。
 
-## M1：发现和配对（进行中）
+## M1：发现和配对（代码已完成；实机验收待部署）
 
 - 已实现 LocalSend 风格 UDP multicast announce（独立组播组和端口）；
 - 已实现持久 Ed25519 `host_id`、公钥指纹和身份文件；
@@ -17,10 +17,11 @@
 - 已实现 heartbeat、超时和指数退避重连；
 - 已实现跨平台 LAN 接口选择，避开 Mihomo/TUN 等虚拟接口；可用
   `CODEX_MONITOR_DISCOVERY_INTERFACE` 做诊断覆盖；
-- 待验证 DHCP/网络重启后的跨主机重连；hostname/URL 兜底仍待实现。
+- `codex-monitor-server` 已具备对等节点公告、配对和签名快照同步；旧 Agent 入口继续兼容；
+  PWA 的已配对 HTTP URL 故障转移已接入，DHCP/网络重启后的持续重连仍待实机验证，hostname/.local/二维码仅在实际 WLAN 隔离时再补。
 
-当前验收：本机 multicast、Windows 本机和 NixOS↔Windows 跨主机发现/配对/重连已通过；
-DHCP/网络重启后的持续重连、hostname/URL 兜底仍待实现。
+当前验收：既有本机 multicast、Windows 本机和 NixOS↔Windows 跨主机发现/配对/重连记录仍有效；
+对等节点代码已完成定向验证，DHCP/网络重启后的持续重连和 hostname/.local/二维码兜底仍待实机验证。
 
 ## M2：Codex 只读监控（已完成）
 
@@ -35,7 +36,7 @@ DHCP/网络重启后的持续重连、hostname/URL 兜底仍待实现。
 验收已通过：Windows 和 NixOS 的状态通过同一个 Monitor API 返回，并能区分主机离线、
 collector 不可用和有效的空会话；同一账户在两个主机上只显示一张聚合卡片。
 
-## M3：Poke3 PWA（进行中）
+## M3：Poke3 PWA（视觉/节点设置已更新；实机验收待部署）
 
 - 已完成黑白高对比布局；
 - 已完成大字体和 15 秒低频轮询；
@@ -44,23 +45,25 @@ collector 不可用和有效的空会话；同一账户在两个主机上只显�
 - 已完成“五小时限制”“一周限制”标签和 `dailyUsageBuckets` 14 天热力图；
 - 已完成 manifest 和静态资源离线缓存，API 请求不进入缓存；
 - 已完成 Monitor 内嵌静态资源路由，页面与 API 使用同一端口；
+- 已接入 IndexedDB 最后状态缓存、离线 stale 标记、手工节点地址和只读 token 设置；
+- 节点在线时会学习已配对 peer 的 HTTP 入口，当前入口失联时 PWA 自动故障转移；
+- 已更新为自然月日历、七色主题持久化、Eink 低刷新样式、可访问设置 modal、发现/配对/本机改名入口和按需本机配对码；
 - 待在 BOOX Poke3 实机验证可读性、安装和断线恢复；持久化历史和 SSE 仍待后续阶段。
 
 验收：Poke3 实机浏览器可访问并保持可读；桌面浏览器静态路由和 API 烟测已通过。
 
-## M4：受限控制
+## M4：受限控制（代码已完成；跨设备验收待部署）
 
-- follow-up；
-- interrupt；
-- stop；
-- resume；
-- rename/archive。
+- 已完成 `interrupt`：HTTP 独立控制 token、本机 collector 路由、已连接 peer 的签名转发、短期过期、
+  request id 校验和节点级防重放；
+- follow-up、stop、resume、rename/archive 暂不实现；Poke3 按钮等待稳定的 `turnId` 展示；
+- 控制入口默认关闭，不开放任意 shell、文件操作或自动审批。
 
-验收：控制命令具有 capability 校验和明确错误状态。
+验收：已完成协议/定向测试和 localhost 认证 smoke；跨 NixOS↔Windows/Poke3 实机控制验收留待部署。
 
-## M5：跨平台交付
+## M5：跨平台交付（基础入口已完成）
 
-- NixOS agent package；
-- Windows server/agent `.exe`；
-- Android PWA；
-- 如 PWA 发现体验不足，再增加薄 APK shell。
+- 已加入 Nix flake package：`nix build .#codex-monitor-node` 同时产出节点和兼容 Agent；
+- 已加入 Windows `build.ps1` 与 Private 网络 `firewall.ps1`；
+- 通用 HTTP/JSON 与 v2 envelope 契约见 [`docs/protocol-v2.md`](../docs/protocol-v2.md)；
+- 已加入 `nixosModules.codex-monitor` systemd 模块和基于用户 env 文件的 Windows 登录启动任务；ESP32 继续直接使用通用 HTTP/JSON 契约，暂不维护未经验证的 SDK 工程。

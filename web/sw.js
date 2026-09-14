@@ -1,5 +1,5 @@
-const CACHE = "codex-monitor-shell-v2";
-const ASSETS = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.webmanifest"];
+const CACHE = "codex-monitor-shell-v21";
+const ASSETS = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.webmanifest", "/app-icon.png", "/app-icon-192.png", "/cat-sprites.png"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(ASSETS)));
