@@ -3,6 +3,7 @@ import fs from "node:fs";
 import vm from "node:vm";
 
 const source = fs.readFileSync(new URL("../web/app.js", import.meta.url), "utf8");
+const html = fs.readFileSync(new URL("../web/index.html", import.meta.url), "utf8");
 
 function helper(name, end = "\\n\\}") {
   const match = source.match(new RegExp(`function ${name}\\([\\s\\S]*?${end}`));
@@ -65,6 +66,9 @@ assert.match(source, /writeStorage\(ACCENT_STORAGE_KEY, accent\)/);
 assert.match(source, /applyAccent\(readStorage\(ACCENT_STORAGE_KEY\), false\)/);
 assert.match(source, /pairingCodeRequestGeneration/);
 assert.match(source, /pairingCodeToggle\.disabled = false/);
+assert.match(source, /pairingCodeRefresh\.addEventListener\("click", showLocalPairingCode\)/);
+assert.match(html, /生成新的配对码/);
+assert.match(html, /刷新配对码/);
 assert.match(source, /pendingPairNodeIds/);
 assert.match(source, /timeoutMs: 25_000/);
 assert.doesNotMatch(source, /pairingCode\.inputMode = "numeric"/);
@@ -75,7 +79,7 @@ assert.match(source, /pairingCode\.pattern = "\[A-Za-z0-9\]\{8\}"/);
 assert.match(source, /pairingCode\.setAttribute\("autocapitalize", "off"\)/);
 assert.match(source, /currentEndpointOnline \? "connected" : "unknown"/);
 assert.match(source, /requestEndpointGeneration !== endpointGeneration/);
-assert.match(fs.readFileSync(new URL("../web/sw.js", import.meta.url), "utf8"), /codex-monitor-shell-v21/);
+assert.match(fs.readFileSync(new URL("../web/sw.js", import.meta.url), "utf8"), /codex-monitor-shell-v23/);
 assert.match(source, /kind === "face" \? "peeking" : kind/);
 assert.doesNotMatch(source, /createElementNS\("http:\/\/www\.w3\.org\/2000\/svg", "svg"\)/);
 assert.match(fs.readFileSync(new URL("../web/styles.css", import.meta.url), "utf8"), /background-image: url\("\/cat-sprites\.png"\)/);

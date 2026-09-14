@@ -132,20 +132,20 @@
               <button class="button button-primary" type="submit">保存昵称</button>
             </form>
             <div class="pairing-code-local">
-              <button id="pairing-code-toggle" class="small-button" type="button">显示当前节点配对码</button>
+              <button id="pairing-code-toggle" class="small-button" type="button">生成新的配对码</button>
               <div id="pairing-code-panel" class="pairing-code-panel" hidden>
                 <code id="pairing-code-value"></code>
+                <button id="pairing-code-refresh" class="small-button" type="button">刷新配对码</button>
                 <button id="pairing-code-hide" class="small-button" type="button">隐藏</button>
               </div>
             </div>
           </div>
           <div class="settings-block">
             <div class="block-heading">
-              <h3>附近设备（其他电脑）</h3>
+              <h3>附近节点</h3>
               <button id="discoveries-refresh" class="small-button" type="button">刷新</button>
             </div>
-            <p class="meta">这里查找当前节点附近的其他电脑，当前入口显示在下方。Poke3 等查看设备不会重复列出。</p>
-            <p class="meta">配对码必须恰好 8 位，由数字及大小写英文字母组成，并区分大小写。</p>
+            <p class="meta">8 位配对码区分大小写。</p>
             <p id="discoveries-status" class="meta">正在读取发现…</p>
             <div id="discoveries" class="device-list"></div>
           </div>

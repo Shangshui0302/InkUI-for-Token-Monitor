@@ -70,6 +70,7 @@ const identityStatus = document.querySelector("#identity-status");
 const pairingCodeToggle = document.querySelector("#pairing-code-toggle");
 const pairingCodePanel = document.querySelector("#pairing-code-panel");
 const pairingCodeValue = document.querySelector("#pairing-code-value");
+const pairingCodeRefresh = document.querySelector("#pairing-code-refresh");
 const pairingCodeHide = document.querySelector("#pairing-code-hide");
 const discoveriesRoot = document.querySelector("#discoveries");
 const discoveriesStatus = document.querySelector("#discoveries-status");
@@ -1311,7 +1312,7 @@ function renderDeviceSettings() {
     } else {
       const pageDevices = sliceDevicePage(otherDiscovered);
       if (pageDevices.length) pageDevices.forEach((device) => discoveriesRoot.append(renderDeviceItem(device, true)));
-      else discoveriesRoot.append(element("p", "empty compact", "当前没有发现其他可配对电脑"));
+      else discoveriesRoot.append(element("p", "empty compact", "当前没有发现其他可配对节点"));
     }
   }
   renderDevicePager(pageCount);
@@ -1407,8 +1408,9 @@ function hideLocalPairingCode() {
   if (pairingCodeToggle) {
     pairingCodeToggle.hidden = false;
     pairingCodeToggle.disabled = false;
-    pairingCodeToggle.textContent = "显示当前节点配对码";
+    pairingCodeToggle.textContent = "生成新的配对码";
   }
+  if (pairingCodeRefresh) pairingCodeRefresh.disabled = false;
 }
 
 async function showLocalPairingCode() {
@@ -1420,7 +1422,9 @@ async function showLocalPairingCode() {
   if (!pairingCodeToggle) return;
   const requestGeneration = ++pairingCodeRequestGeneration;
   pairingCodeToggle.disabled = true;
-  pairingCodeToggle.textContent = "读取中…";
+  if (pairingCodeRefresh) pairingCodeRefresh.disabled = true;
+  if (pairingCodeValue) pairingCodeValue.textContent = "生成中…";
+  pairingCodeToggle.textContent = "生成中…";
   try {
     const result = await apiRequest("/api/v1/pairing-code", { token: controlToken });
     if (requestGeneration !== pairingCodeRequestGeneration || !settingsDeviceVisible()) return;
@@ -1431,11 +1435,16 @@ async function showLocalPairingCode() {
     pairingCodePanel.hidden = false;
     pairingCodeToggle.disabled = false;
     pairingCodeToggle.hidden = true;
+    if (pairingCodeRefresh) pairingCodeRefresh.disabled = false;
   } catch (error) {
     if (requestGeneration !== pairingCodeRequestGeneration || !settingsDeviceVisible()) return;
     if (identityStatus) identityStatus.textContent = requestErrorMessage(error, "配对码读取失败");
+    if (pairingCodeValue) pairingCodeValue.textContent = "";
+    if (pairingCodePanel) pairingCodePanel.hidden = true;
     pairingCodeToggle.disabled = false;
-    pairingCodeToggle.textContent = "显示当前节点配对码";
+    pairingCodeToggle.hidden = false;
+    pairingCodeToggle.textContent = "生成新的配对码";
+    if (pairingCodeRefresh) pairingCodeRefresh.disabled = false;
   }
 }
 
@@ -1882,6 +1891,7 @@ if (endpointForm && endpointInput) {
 if (endpointReset) endpointReset.addEventListener("click", () => applyEndpoint(window.location.origin));
 if (identityForm) identityForm.addEventListener("submit", saveIdentity);
 if (pairingCodeToggle) pairingCodeToggle.addEventListener("click", showLocalPairingCode);
+if (pairingCodeRefresh) pairingCodeRefresh.addEventListener("click", showLocalPairingCode);
 if (pairingCodeHide) pairingCodeHide.addEventListener("click", hideLocalPairingCode);
 if (discoveriesRefresh) discoveriesRefresh.addEventListener("click", () => {
   discoveryState = null;

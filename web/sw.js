@@ -1,4 +1,4 @@
-const CACHE = "codex-monitor-shell-v21";
+const CACHE = "codex-monitor-shell-v23";
 const ASSETS = ["/", "/index.html", "/styles.css", "/app.js", "/manifest.webmanifest", "/app-icon.png", "/app-icon-192.png", "/cat-sprites.png"];
 
 self.addEventListener("install", (event) => {
