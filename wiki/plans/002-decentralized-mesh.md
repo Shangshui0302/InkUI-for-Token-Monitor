@@ -1,6 +1,6 @@
 # Codex Monitor 去中心化自组网方案
 
-状态：`p0-p6-implemented; deployment-acceptance-pending`（2026-09-10）
+状态：`pc-mesh-p0-p6-implemented; android-peer-validated; deployment-acceptance-pending`（2026-09-14）
 
 ## 目标
 
@@ -9,17 +9,17 @@
 入口、缓存或发现 seed；当前不是状态权威或状态 relay，relay 尚未实现，仅作为未来可选扩展，
 也不需要购买第三台设备。
 
-Poke3/ESP32 是只读客户端，不运行 Codex agent、不持有 Codex 凭据；会话控制只由带独立
-控制 token 的 PWA 发起，并路由到拥有目标会话的 PC。
+Poke3 是不采集 Codex 数据的完整网络节点：它有独立 P-256 身份、发现、一次性配对和持久信任记录，但不持有
+Codex 凭据。它通过认证快照维护原生持久概览、额度、动态和会话面板，HTTP 18788 不可达时仍可查看缓存；支持浅/深/电子墨水主题和节点改名。WebView/PWA 仅为可选网页兼容查看器。ESP32 仍是只读 HTTP 客户端；会话控制只由带独立控制 token 的界面发起，并路由到拥有目标会话的 PC。
 
 ## 拓扑和角色
 
 ```text
-PC-A (NixOS)  ◄── multicast discovery + Ed25519 paired TCP ──►  PC-B (Windows 10)
-     │                                                         │
-     └────────────── same NetworkView / HTTP JSON ────────────┘
-                              ▲
-                    Poke3 / ESP32 / browser
+PC-A (NixOS)  ◄──── authenticated peer TCP ────►  PC-B (Windows 10)
+     ▲                                                     ▲
+     └──── multicast discovery + pairing ───► Poke3 node ─┘
+                              │
+                   Native Android dashboard / optional WebView / ESP32 HTTP view
 ```
 
 - 每台 PC 运行同一个 `codex-monitor-node`（兼容命令名仍为 `codex-monitor-server`），并在本机
@@ -35,8 +35,9 @@ PC-A (NixOS)  ◄── multicast discovery + Ed25519 paired TCP ──►  PC-B
 1. 节点以 TTL=1 的 UDP multicast `239.255.77.77:37991` 广播服务、TCP 端口、公钥、能力和
    `networkId`；同时发往 `255.255.255.255:37991` 作为 multicast 被 WLAN 禁止时的轻量兜底；
    接口选择跳过 Mihomo/TUN 等虚拟网卡。
-2. 首次 TCP 握手使用短期配对码和 Ed25519 challenge-response，双方保存对端公钥；之后只按
-   公钥/host ID 重连，不要求重新输入 IP 或 SSH。
+2. 首次 TCP 握手使用显式生成的一次性配对码和签名 challenge-response，双方保存对端公钥；
+   桌面保持 Ed25519 node ID，并提供 Android 10 可验证的 P-256 pairing key。刷新会立即作废旧码，
+   同一码只允许一次配对成功；之后只按公钥/host ID 重连，不要求重新输入 IP 或 SSH。
 3. heartbeat 和超时驱动断开；下一次公告使用新的源地址重连。multicast/broadcast 被 AP 隔离时，
    可用 `CODEX_MONITOR_DISCOVERY_TARGETS` 定向发送公告（端口可省略，默认 UDP 发现端口
    `37991`）；优先填写能随 DHCP 更新的局域网 DNS/mDNS 主机名，IP 仅作应急。PWA 仍保留手工
@@ -60,7 +61,7 @@ PC-A (NixOS)  ◄── multicast discovery + Ed25519 paired TCP ──►  PC-B
 
 - 传输：换行分隔 JSON over TCP，旧 v1 Agent 消息继续可读；新 peer 状态和控制使用 v2
   `MessageEnvelope`，具体字段和签名规则见 [`docs/protocol-v2.md`](../../docs/protocol-v2.md)。
-- 能力：`state-snapshot-v1`、`peer-sync-v1`、`control`；未协商能力的消息不执行。
+- PC peer capabilities include `state-snapshot-v1`, `peer-sync-v1`, and `control`; messages without the required negotiated capability are not executed. Android's native dashboard consumes P-256-authenticated snapshots over its peer connection; the earlier `peer-sync-v1` WebView-shell notes are not its UI/data-path description.
 - 客户端 API：
 
   ```text
@@ -78,9 +79,8 @@ PC-A (NixOS)  ◄── multicast discovery + Ed25519 paired TCP ──►  PC-B
 
 ## 客户端和平台交付
 
-- Poke3：原生 HTML/CSS/JS PWA，四个按钮分页、五小时/一周额度标签、14 天热力图、IndexedDB
-  最后快照和离线提示；从 `peers[].httpEndpoint(s)` 学习已配对节点并在入口失联时自动故障转移；
-  不监听 multicast、不运行 agent。
+- Poke3：原生 Android 前台 peer service 拥有 P-256 身份、UDP/TCP 监听、一次性配对码和可信节点重连；
+  原生仪表盘使用认证并持久化的快照，WebView 仅可选复用 HTML/CSS/JS 网页查看器。Android peer 本身不采集 Codex 数据或保存桌面端凭据。
 - ESP32：只实现 HTTP GET、JSON 子集和 `since` cursor；缓存最后快照，显示更新时间/stale；不需要
   Rust 或 peer 私钥。
 - NixOS：`nix build .#codex-monitor-node` 生成节点和兼容 agent；系统服务/防火墙仍由用户的
@@ -94,11 +94,12 @@ PC-A (NixOS)  ◄── multicast discovery + Ed25519 paired TCP ──►  PC-B
 - P0/P1：协议、身份、发现、配对、双向状态同步和兼容 Agent 已接入。
 - P2/P3：cursor/304、状态缓存、Poke3 离线缓存和任意节点手工切换已接入。
 - P5/P6：只读/控制 token、签名控制、双向 interrupt 路由已接入；其他写操作暂不开放。
+- Android peer：Android API 29 Poke3 实机已验证 UDP 37991/TCP 8787、一次性配对、持久 P-256 身份和信任、认证快照持久化、原生四页仪表盘及 HTTP 18788 不可达下可用；主题含浅/深/电子墨水并支持节点改名。
 - 自动/本地已验证：Windows 安全部署与 x64 release 产物（server/agent）、Windows localhost
   HTTP 200 与 Codex CLI 定位、NixOS 实际 collector 的 sessions/account/300 与 10080 分钟窗口
   及 daily usage、Podman 双节点协议链路和定向 discovery 发送单测。
-- 手工/外部验收仍待完成：NixOS↔Windows 真实 mesh（本轮因验收编排/启动路径未形成证据，不能归因
-  为程序失败）、DHCP/网络重启、Windows HTTP `8788` 入站规则、Poke3 加网/安装/断线恢复和控制。
-- 明日最小顺序：用临时状态启动双方并完成真实 mesh；由管理员添加 Windows HTTP `8788` 规则；再让
-  Poke3 连接任一节点。具体 DHCP 地址不写入方案，优先使用局域网 DNS/mDNS 主机名。
-- 历史数据库、SSE、MQTT/WebSocket、原生 APK 和任意 shell/文件操作仍保持需求驱动；relay 仍未实现。
+- Poke3 实机已验证：Android 10 APK 升级安装、独立 P-256 身份、双向 UDP 发现、签名首次配对、
+  双端在线状态、Android/桌面分别重启后的无配对码自动重连，以及配对码生成/刷新测试均通过。
+- 手工/外部验收仍待完成：NixOS↔Windows 真实 mesh（此前未形成证据，不能归因于程序失败）、
+  DHCP 地址变化、Windows HTTP `8788` 入站规则和跨节点控制。
+- 历史数据库、SSE、MQTT/WebSocket 和任意 shell/文件操作仍保持需求驱动；relay 仍未实现。

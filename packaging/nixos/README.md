@@ -36,13 +36,12 @@
 }
 ```
 
-`/run/secrets/codex-monitor.env` 可包含 `CODEX_MONITOR_PAIR_CODE`、
-`CODEX_MONITOR_READ_TOKEN` 和 `CODEX_MONITOR_CONTROL_TOKEN`。服务用户必须能运行 `codex`
+`/run/secrets/codex-monitor.env` 可包含 `CODEX_MONITOR_READ_TOKEN` 和
+`CODEX_MONITOR_CONTROL_TOKEN`。服务用户必须能运行 `codex`
 并读取其本地 Codex 配置；`nixos-rebuild switch` 仍由用户手动执行。
 
-配对码是区分大小写的 8 位 ASCII 字母数字串。自动初次连接时，两端需配置相同的码；管理 API
-手动配对则填写目标对端的码，两端本地码可以不同。原先的 6 位环境变量必须更换，已保存的
-对端公钥不会因此改变。
+配对码是区分大小写的 8 位 ASCII 字母数字串。未配对节点只会被发现；在管理界面生成新码，
+并在发起端填写目标对端当前的码。刷新或一次成功配对会令旧码失效；已保存的对端公钥不会因此改变。
 
 节点需要接收对等连接和 LAN 发现公告；启用 NixOS 防火墙时，模块会按 `openFirewall = true`
 放行 TCP `8787`、TCP `8788` 和 UDP `37991`。只有迁移期的旧 Agent 只需对 Monitor 出站连接。

@@ -1,19 +1,35 @@
 # Codex Monitor 通用协议（v2）
 
-PC 节点之间使用换行分隔 JSON over TCP（单帧上限 512 KiB）；Poke3、ESP32 和其他设备只需要 HTTP/JSON，
-不需要 Rust 运行时。所有时间字段为 Unix 秒，所有 ID 和 token 都是 UTF-8 字符串。
+Android 10 节点协商 `peer-sync-p256-v1` 与 `state-snapshot-v1`。桌面端随后发送
+`AndroidSnapshot`：`payloadJson` 保留被签名的精确 UTF-8 JSON，签名消息为
+`codex-monitor/android-snapshot-v1:<networkId>:<senderId>:<payloadJson>`，并使用配对时已固定的
+P-256 公钥验证。Android 因此不依赖平台 Ed25519，也不会接受未认证的状态快照。
+
+节点之间使用换行分隔 JSON over TCP（单帧上限 512 KiB）。Linux、Windows 与 Android 都是完整节点；
+ESP32 等只读显示器仍可只实现 HTTP/JSON。所有时间字段为 Unix 秒，所有 ID 和 token 都是 UTF-8 字符串。
 
 ## 节点发现与配对
+
+发现流程参考 [LocalSend Protocol v2.1](https://github.com/localsend/protocol)：节点启动即公告稳定身份，
+接收方记录来源地址并主动回连，身份指纹用于排除自发现和记忆设备。Codex Monitor 不复用其文件传输
+协议，并额外要求一次性配对码和双方签名挑战，不能把未经认证的 UDP 地址直接视为可信节点。
 
 - UDP multicast：`239.255.77.77:37991`，TTL 为 1；公告包含 `networkId`、`hostId`、
   `publicKey`、TCP `port`、可选 HTTP `httpPort` 和能力列表。节点同时向
   `255.255.255.255:37991` 发送相同公告，
   作为部分 WLAN 禁止 multicast 时的轻量兜底。
-- TCP peer：默认 `8787`。首条消息为 `AgentHello`，随后是 Ed25519 challenge-response。
-- 配对码为区分大小写的 8 位 ASCII 字母数字串；随机生成时至少包含一个数字、一个大写字母和一个小写字母。格式校验只要求 8 位 ASCII 字母数字。
-- 节点只接受同一 `networkId` 且已保存公钥的 peer；首次配对需要短期配对码。自动初次连接需两端配置相同配对码；`POST /api/v1/pair` 手动配对使用目标对端的配对码，两端本地配对码无需相同。
-- 旧版本的 6 位 `CODEX_MONITOR_PAIR_CODE` 配置需更换为 8 位；配对码变更不会删除或重置已保存的对端公钥。
-- 地址变化不影响身份。节点重新公告后按 `hostId` 重连，Poke3 不监听 multicast。
+- TCP peer：默认 `8787`。首条 `AgentHello` 只含身份/能力元数据，不含配对码。新配对使用
+  `codex-monitor/pair-transcript-v2`：按 initiator、acceptor 顺序，以 32 位大端长度前缀编码双方
+  host ID、主公钥、配对公钥、network ID 和 acceptor 随机 challenge。challenge 与最终
+  `PairAccepted` 均由接收方身份签名；发起方的 `PairResponse.codeProof` 和接收方的
+  `PairAccepted.codeProof` 分别是以配对码为密钥、区分 `initiator`/`acceptor` 角色的 HMAC-SHA256。
+  只有验证对端的签名及返回的 code proof 后，发起方才持久化 trust；未认证的 `PairAccepted` 必须拒绝。
+- 配对码为区分大小写的 8 位 ASCII 字母数字串，生成时至少包含数字、大写字母和小写字母各一个。每次读取或刷新都创建新一代配对码，旧代立即失效。
+- 未配对节点只进入发现列表。首次配对必须由用户输入目标节点当前配对码，但码不会进入 `AgentHello` 或其他网络字段；双方只交换绑定上述 transcript 的 HMAC proof。同一码最多完成一次配对，成功后立即消费。失败握手不会明文暴露配对码，但捕获到 proof 仍具有下述离线枚举边界。
+- 已保存的 peer 按持久公钥重连，不需要配对码。刷新配对码不会清除信任记录。
+- 地址变化不影响身份。节点重新公告后按 `hostId` 重连；Android 节点和桌面节点一样监听 multicast、回应发现并接受 TCP 回连。
+
+安全边界：随机 challenge、角色标签和 transcript 绑定可阻止主动 MITM 替换任一身份、公钥或网络后仍完成配对；旧的未认证 `PairAccepted` 不再被接受。此方案不是 PAKE：旁观者可从一次捕获的 HMAC proof 离线枚举 8 位短码，因此应通过可信的本地 UI/通道安全传递短时配对码，并在发现泄露时刷新。代码从不明文上网，但 HMAC 不能隐藏低熵口令的离线猜测风险。
 
 ## 签名信封
 
@@ -55,8 +71,8 @@ GET /api/v1/health
 发现缓存中的 `nodeId` 和配对码，连接地址来自已验证公告，不接受 HTTP 传入地址。
 `pairingCode` 必须是 8 位 ASCII 字母数字，否则返回 400；若对应节点的握手尚在进行，重复请求返回
 409 `peer connection is already in progress`，只有已确认的 peer 连接才返回 `connected`。
-`GET /api/v1/pairing-code` 同样只接受控制 token，返回本节点当前握手配对码且使用
-`Cache-Control: no-store`；它不会出现在只读 identity、state 或 discoveries 响应中。
+`GET /api/v1/pairing-code` 同样只接受控制 token。每次成功请求都会轮换并返回一枚新的一次性配对码，响应使用
+`Cache-Control: no-store`；旧码立即失效，且配对码不会出现在只读 identity、state 或 discoveries 响应中。
 用户通过 `PATCH /api/v1/identity` 保存的昵称优先于 `CODEX_MONITOR_ALIAS`，因此服务重启后
 仍保持 UI 改名；只有尚无持久化昵称时才采用环境变量。
 

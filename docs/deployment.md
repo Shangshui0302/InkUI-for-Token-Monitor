@@ -1,19 +1,18 @@
 # Codex Monitor 部署
 
-这套部署不需要固定 IP，也不需要 Poke3 运行 SSH。两台 PC 都运行同一个节点程序；任意一台
-都可以作为 Poke3 的入口，节点会通过 UDP 发现和已配对 TCP 连接同步状态。
+这套部署不需要固定 IP，也不需要 Poke3 运行 SSH。两台 PC 都运行同一个节点程序；Poke3
+则运行独立 Android peer，通过 UDP 发现和已配对 TCP 连接接收认证状态快照。原生仪表盘将快照持久化，桌面 HTTP 不可达时仍可查看最后同步的数据。
 
 ## 端口和配置
 
 | 用途 | 默认端口 | 方向 |
 | --- | ---: | --- |
 | 节点发现 | UDP 37991 | 局域网广播/multicast |
-| PC 对等连接 | TCP 8787 | PC 节点之间 |
-| Poke3/API | TCP 8788 | Poke3 到 PC |
+| 对等连接与 Android 快照 | TCP 8787 | PC 节点之间；Android 与已配对 PC 之间 |
+| 桌面 HTTP API/兼容网页 | TCP 8788（默认） | 浏览器或可选 Android WebView 到 PC |
 
-两台 PC 的 `CODEX_MONITOR_NETWORK_ID` 和首次配对用的
-`CODEX_MONITOR_PAIR_CODE` 必须一致。配对完成后会保存对端公钥，后续 DHCP 地址变化不需要
-重新输入 IP 或配对码。
+两台 PC 的 `CODEX_MONITOR_NETWORK_ID` 必须一致。未配对节点只会显示在附近列表；显式配对
+完成后会保存对端公钥，后续 DHCP 地址变化不需要重新输入 IP 或配对码。
 
 如果 WLAN 阻断 multicast/broadcast，可在每台节点设置
 `CODEX_MONITOR_DISCOVERY_TARGETS=devbox-a.local,10.0.0.22:37991,[2001:db8::22]:37991`。
@@ -29,14 +28,13 @@
 `environmentFile` 至少可包含：
 
 ```text
-CODEX_MONITOR_PAIR_CODE=Ab3dE7qK
 CODEX_MONITOR_READ_TOKEN=read-secret
 CODEX_MONITOR_CONTROL_TOKEN=control-secret
 ```
 
-服务启动日志会打印当前 `pairing code:`。配对码是区分大小写的 8 位 ASCII 字母数字串；自动初次连接时两端要设置同一个
-`CODEX_MONITOR_PAIR_CODE`。通过管理 API 手动配对时输入目标对端的码，不要求两端本地码相同；API 不会持久化用户输入的配对码。
-旧版本的 6 位配置必须换成 8 位。配对码只用于初次配对，变更它不会影响已经保存的对端公钥。
+配对码是区分大小写的 8 位 ASCII 字母数字串。通过管理界面生成新码后，旧码立即失效；配对成功也会消费该码并自动换代。
+未配对节点不会再依赖两端相同的环境变量自动加入网络。通过管理 API 手动配对时输入目标对端当前显示的码；API 不会持久化用户输入的码。
+配对码只用于首次建立信任，刷新它不会影响已经保存的对端公钥。
 
 需要让 Poke3 访问时将 `httpBind` 设为 `0.0.0.0:8788`，并把 `openFirewall` 设为 `true`；
 只在修改 Nix 配置后由用户手动执行 `nixos-rebuild switch`。
@@ -50,7 +48,6 @@ pwsh -File packaging\windows\build.ps1
 pwsh -File packaging\windows\firewall.ps1
 pwsh -File packaging\windows\run-node.ps1 `
   -NetworkId home-lan `
-  -PairCode Ab3dE7qK `
   -HttpBind 0.0.0.0:8788 `
   -ReadToken read-secret `
   -ControlToken control-secret
@@ -61,7 +58,6 @@ pwsh -File packaging\windows\run-node.ps1 `
 
 ```text
 CODEX_MONITOR_NETWORK_ID=home-lan
-CODEX_MONITOR_PAIR_CODE=Ab3dE7qK
 CODEX_MONITOR_READ_TOKEN=read-secret
 CODEX_MONITOR_CONTROL_TOKEN=control-secret
 ```
@@ -78,12 +74,12 @@ HTTP 端口，需让 `-HttpPort` 与 `CODEX_MONITOR_HTTP_BIND` 保持一致。�
 
 ## Poke3 / Android
 
-1. 确认 Poke3 与任一 PC 在同一局域网。
-2. 浏览器打开 `http://<任一PC的当前IP>:8788/`。
-3. 在“节点地址”中保存入口和只读 token；需要中断会话时再填写独立控制 token。
-4. 局域网 HTTP 可在线使用网页或 Android APK；浏览器可能只提供主屏幕快捷方式。完整 PWA 安装与离线页面缓存需要 HTTPS（开发用 localhost 是例外）。
+1. 安装 Android APK（Android 10/API 29 或更新版本），确认 Poke3 与至少一个 PC 在同一局域网。
+2. 在原生节点页查看本机一次性配对码，并输入 PC 当前显示的码完成首次配对；之后通过持久公钥信任自动重连。
+3. Android 使用 UDP 37991 发现节点、TCP 8787 建立 peer 连接；经 P-256 身份认证的快照会本地持久化并显示在原生概览、额度、动态和会话面板。
+4. 桌面 TCP 18788 不可达不影响已配对 Android 原生仪表盘查看其本地快照；如果要使用网页兼容查看器，才需要桌面 HTTP 页面和 API 可达。
 
-PWA 在线时会从 `peers[].httpEndpoint` 和 `peers[].httpEndpoints` 学习其他已配对 PC 的 IP、
+可选 WebView/PWA 查看器在线时会从 `peers[].httpEndpoint` 和 `peers[].httpEndpoints` 学习其他已配对 PC 的 IP、
 主机名和 `.local` 候选。当前入口失联后会自动尝试缓存的其他入口；所有节点使用相同 token
 时切换无需重新输入。已打开的页面在网络完全中断时显示最后快照并标为 stale，恢复后自动刷新；关闭后离线重开还需要浏览器已成功缓存页面壳，普通局域网 HTTP 不保证这一点。使用 HTTPS 页面时，节点 API 也需提供 HTTPS，避免混合内容被浏览器拦截。
 主机名候选依赖路由器本地 DNS、LLMNR 或 mDNS；这些解析服务不可用时，仍可在“节点地址”中
@@ -91,10 +87,9 @@ PWA 在线时会从 `peers[].httpEndpoint` 和 `peers[].httpEndpoints` 学习其
 
 ## 可选中央入口
 
-不需要额外购买设备。把任意一台常开的 PC 地址手工填入 Poke3 即可作为入口；multicast/broadcast
-受限时，也可把它的局域网主机名或 IP 配到 `CODEX_MONITOR_DISCOVERY_TARGETS` 作为 discovery
-seed。它只是入口、缓存或发现 seed，业务状态仍由各 PC 对等同步；当前不是状态权威或状态 relay，
-relay 尚未实现，仅作为未来可选扩展，入口离线不影响已配对 PC 之间收敛。
+Poke3 APK 本身就是拥有独立身份的 peer，会参与 multicast/broadcast 发现、TCP 配对和可信节点重连；WebView 地址仅供可选兼容查看器使用，不决定 Android 节点身份。
+发现受限时，仍可把一台常开机器的局域网主机名或 IP 配到 `CODEX_MONITOR_DISCOVERY_TARGETS`
+作为 discovery seed；它不是状态权威或 relay，入口离线不影响其他已配对节点之间收敛。
 
 ## 快速检查
 

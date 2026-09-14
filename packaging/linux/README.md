@@ -20,7 +20,6 @@ without embedding its contents in the package. For example:
 install -d -m 700 "$HOME/.config/codex-monitor"
 umask 077
 cat > "$HOME/.config/codex-monitor/codex-monitor.env" <<'EOF'
-CODEX_MONITOR_PAIR_CODE=Ab3dE7qK
 CODEX_MONITOR_READ_TOKEN=change-me-too
 CODEX_MONITOR_CODEX_BIN=/absolute/path/to/codex
 EOF
@@ -30,11 +29,10 @@ Keep real secrets only in that user-owned file; never pass them as Nix options o
 build arguments. The uninstall script disables/removes the unit and binaries but
 preserves user configuration and node state. No root access is required.
 
-Pairing codes are case-sensitive 8-character ASCII alphanumeric strings. For
-automatic first pairing, configure the same code on both nodes; a manual pairing
-request uses the target node's code, so the two local codes need not match. Replace
-legacy six-digit `CODEX_MONITOR_PAIR_CODE` values. Changing a code does not affect
-already-paired public keys.
+Pairing codes are case-sensitive 8-character ASCII alphanumeric strings. Generate
+one from the target node's management UI and enter that current code on the
+initiating node. Refreshing or one successful pairing invalidates it; trusted peers
+reconnect by their persisted public keys.
 
 Packagers may set `DESTDIR` to stage or test installation without invoking
 `systemctl`; normal users should leave it unset.

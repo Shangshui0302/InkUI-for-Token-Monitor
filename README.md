@@ -2,7 +2,7 @@
 
 面向两台开发主机和 BOOX Poke3 的 Codex 会话、账户额度监控台。
 
-当前状态：P0/P1 对等节点同步、P2 cursor/缓存、M3.1 Poke3 PWA/Android APK、M4 受限 interrupt 和 NixOS systemd 入口已接入；SSE、其他控制命令和持久化历史仍待后续阶段。
+当前状态：PC 对等节点同步、Poke3 Android API 29 独立 P-256 节点及原生持久监控面板、M4 受限 interrupt 和 NixOS systemd 入口已接入；Android 通过 TCP 8787 接收认证快照，不依赖桌面 HTTP 18788。WebView/PWA 是可选兼容查看器，不是 Android 主界面。SSE、其他控制命令和持久化历史仍待后续阶段。
 
 ## 目标拓扑
 
@@ -11,14 +11,15 @@ PC-A（NixOS）                       PC-B（Windows 10）
   └─ codex-monitor-server/node  ◄──►  codex-monitor-server/node
       本机 Codex collector              本机 Codex collector
 
-可选中央入口：仅用于 PWA 手工入口、缓存或发现 seed；当前不是状态权威或状态 relay，relay 尚未实现，仅作为未来可选扩展
+可选发现 seed：PC 节点仍直连同步；当前没有状态权威或 relay
 
 BOOX Poke3
-  └─ 通过 Android WebView APK 或浏览器/PWA 连接任意 PC 节点
+  └─ Android 原生 P-256 peer：发现、一次性配对、持久信任与认证快照
+       ├─ 原生持久仪表盘（HTTP 18788 不可达时仍可用）
+       └─ 可选 WebView 兼容查看器
 ```
 
-PC 节点使用 LocalSend 风格的 UDP multicast/局域网广播发现和 Ed25519 配对，不依赖固定 IP；Poke3
-不运行 Agent，也不维护 SSH。网络分区期间显示最后已知状态，恢复后最终收敛。
+PC 节点使用 UDP multicast/局域网广播发现和 Ed25519 节点身份；Android peer service 使用独立 P-256 身份，三者通过一次性配对建立持久信任。发现使用 UDP 37991，对等 TCP 使用 8787；Android 不采集 Codex 数据或持有桌面 Codex 凭据。网络分区期间显示最后已知状态，恢复后最终收敛。
 
 ## 文档
 
@@ -42,18 +43,18 @@ nix build .#codex-monitor-node
 NixOS 可导入 `nixosModules.codex-monitor` 作为 systemd 服务，示例见
 [`packaging/nixos/README.md`](packaging/nixos/README.md)；不会自动执行 `nixos-rebuild switch`。
 
-在两台 PC 上运行同一个节点（自动初次连接时，两端 network ID 和配对码保持一致）：
+在两台 PC 上运行同一个节点（两端 network ID 保持一致）：
 
 ```bash
 CODEX_MONITOR_NETWORK_ID=home-lan \
-CODEX_MONITOR_PAIR_CODE=Ab3dE7qK \
 CODEX_MONITOR_HTTP_BIND=0.0.0.0:8788 \
 cargo run -p codex-monitor-server
 ```
 
-配对码为区分大小写的 8 位 ASCII 字母数字串；随机生成的码至少包含一个数字、一个大写字母和一个小写字母。
-自动初次连接需要两端使用相同配对码；通过管理 API 手动配对时输入的是对端节点的配对码，两端本地配对码可以不同。
-从旧版本升级时，原先的 6 位 `CODEX_MONITOR_PAIR_CODE` 必须改为 8 位；已保存的对端公钥不受配对码变更影响。
+配对码为区分大小写的 8 位 ASCII 字母数字串；每次请求或手动刷新都会生成新码并立即作废旧码。
+未配对节点只会互相发现，不会因为碰巧使用相同配置而自动加入网络。发起配对时输入对端当前显示的码；一次首次配对成功后该码立即失效，已保存身份的节点重连不再使用配对码。
+配对码不会明文通过 TCP 发送；握手以 HMAC-SHA256 双向证明码持有并签名绑定双方身份、公钥、network ID 和随机 challenge 的 transcript。8 位短码仍使捕获的 proof 存在离线枚举风险，详见[协议安全边界](docs/protocol-v2.md#节点发现与配对)。
+Android APK 同样运行独立节点，拥有自己的持久身份、发现监听、配对码和信任记录；WebView 只是它查看任一已连接桌面节点的界面。
 
 旧的 `codex-monitor-agent` 入口继续保留，用于迁移期连接不支持 peer-sync 的旧 Monitor。
 
@@ -98,14 +99,17 @@ PC 或可选中央节点；在线时会从 `peers[].httpEndpoint` 和 `peers[].h
 普通局域网 HTTP 支持在线页面，但不保证关闭后离线重开或完整 PWA 安装；需要这些能力时，请为页面和节点 API 使用 HTTPS。开发用 localhost 不代表普通局域网 HTTP 的支持情况。
 PWA 节点设置面板可分别保存只读 token 和控制 token；会话在拿到活动 `turnId` 时显示受限“中断”按钮。
 
-NixOS 是主开发环境；Windows 10 和 NixOS 都运行同一 PC 节点程序。Android 端首版使用
-可安装 PWA，必要时再增加薄 APK 外壳。
+NixOS 是主开发环境；Windows 10 和 NixOS 都运行同一 PC 节点程序。Android 交付为原生 APK；可选 WebView/PWA 仅用于兼容查看桌面网页界面。
+
+## 反馈与贡献
+
+遇到问题可以直接提交 Issue；如果已经修复，也欢迎提交 Pull Request。
 
 ## 当前边界
 
 - 不复制 `~/.codex/auth.json` 到 Monitor 或 BOOX；
 - 不把 Codex App Server 直接暴露到局域网；
 - 只开放受限的 interrupt，不开放任意 shell、文件操作或自动审批；
-- M1 已验证 discovery、Ed25519 challenge-response、heartbeat、重连骨架和跨主机 Windows 防火墙；
-- M2 已接入 HTTP 状态 API 和 Codex App Server collector；M3/M3.1 已接入 Poke3 PWA、按钮分页和日用量热力图；M4 已接入受限 interrupt，SSE 和其他控制命令待后续阶段；
-- 尚未决定项目开源许可证，暂记为 TBD。
+- M1 已验证 discovery、节点身份 challenge-response、heartbeat、重连骨架和跨主机 Windows 防火墙；
+- M2 已接入 HTTP 状态 API 和 Codex App Server collector；M3/M3.1 已接入网页/PWA 按钮分页和日用量热力图（Android 上仅作可选兼容查看器）；M4 已接入受限 interrupt，SSE 和其他控制命令待后续阶段；
+- 项目采用 [MIT License](LICENSE)。

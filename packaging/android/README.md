@@ -1,10 +1,22 @@
-# Android WebView shell
+# Android native peer node
 
-This is a small, native Java APK wrapper for the existing Codex Monitor web UI. It has no cross-platform framework and contains no monitor business logic. On first launch it shows a local address form; the URL is kept in app-private preferences. The Android-only section in the web UI's Display settings can reopen that form later. No token, cookie, or authentication flow is copied into the APK.
+This is a native Java peer node for Android 10 and newer. A foreground service owns a persistent AndroidKeyStore P-256 identity, UDP multicast/broadcast discovery, the TCP 8787 peer listener, one-time pairing codes, and the trusted-peer store independently of the Activity and WebView lifetimes. It does not collect Codex data or hold desktop Codex credentials.
+
+The Activity owns a persisted, authenticated monitoring dashboard with Overview,
+Quota, Activity, and Sessions tabs. Data arrives as P-256-signed snapshots over
+TCP 8787, so the native dashboard does not depend on a desktop HTTP port. It has
+light and dark palettes plus a separate high-contrast e-ink mode; dark mode is
+not offered while e-ink mode is selected.
+
+The launcher opens a compact Chinese e-ink-oriented native node page using the same black-cat visual language as the web UI. It shows this device's identity, current one-time code, nearby nodes, paired nodes, and connection state in one landscape screen; duplicate paired entries are collapsed. Enter the other node's current eight-character code to pair a discovered node. The P-256 key and manual `host:port` fallback live under Advanced settings. Refreshing the local code invalidates the previous code; a successful first pairing consumes it. Saved public-key trust is used for later reconnects without another code. The device can be renamed locally.
+
+The displayed code is never sent in `AgentHello`: Android and desktop exchange role-separated HMAC-SHA256 proofs over the signed identity/key/network/challenge transcript. A node saves new trust only after validating the signed acceptance and the peer's code-possession proof. This short-code HMAC is not a PAKE; a captured proof permits offline guessing. See [`../../docs/protocol-v2.md`](../../docs/protocol-v2.md) for the exact transcript and security boundary.
+
+The native Activity also provides a persistent overview/quota/activity/sessions dashboard populated by P-256-authenticated snapshots over TCP 8787. It does not need desktop HTTP 18788 to render an already received snapshot. The optional WebView is only a compatibility viewer for an existing desktop node; its saved URL stays in app-private preferences, and no token, cookie, or authentication flow is copied into the native node service.
 
 The activity has no native title bar. Once the monitor UI is open, status and navigation bars are hidden by default with Android immersive mode. The two Android-only Display settings change those choices immediately and persist them in app-private preferences. Edge swipes can reveal system bars temporarily; Onyx system overlays remain controlled by the device.
 
-At the web UI's root page, Android Back opens a native menu with Change address, Retry, Exit, and Cancel. A failed main-document request, HTTP status 400 or higher, or a 30-second main-document loading timeout opens the native address recovery form with an error explanation, editable address, retry, and exit actions. Subresource failures do not replace the page with recovery UI. Old WebView callbacks are ignored after the WebView is replaced or the active main-document URL changes.
+In the optional WebView, Android Back opens a native menu with Change address, Retry, Exit, and Cancel. A failed main-document request, HTTP status 400 or higher, or a 30-second main-document loading timeout opens the native address recovery form with an error explanation, editable address, retry, and exit actions. Subresource failures do not replace the page with recovery UI. Old WebView callbacks are ignored after the WebView is replaced or the active main-document URL changes.
 
 The PWA, page header and Android legacy/round/adaptive launcher resources use the same generated black-cat master image. See [`../../docs/android-compatibility.md`](../../docs/android-compatibility.md) for the tested matrix and remaining platform boundaries.
 
@@ -22,7 +34,7 @@ NIXPKGS_ACCEPT_ANDROID_SDK_LICENSE=1 \
 nix develop --impure --command ./build.sh
 ```
 
-The installable test-signed APK is written to `.build/CodexMonitor-test.apk`. Generated files and the test key stay under the ignored `.build/` directory.
+The build also runs the pure-Java pairing-code concurrency/refresh test. The installable test-signed APK is written to `.build/CodexMonitor-test.apk`. Generated files and the test key stay under the ignored `.build/` directory.
 
 ## Install and uninstall
 

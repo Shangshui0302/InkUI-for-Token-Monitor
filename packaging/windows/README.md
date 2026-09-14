@@ -15,15 +15,14 @@
 ```powershell
 pwsh -File packaging\windows\build.ps1
 pwsh -File packaging\windows\firewall.ps1
-pwsh -File packaging\windows\run-node.ps1 -PairCode Ab3dE7qK -ReadToken "read-secret" -ControlToken "control-secret"
+pwsh -File packaging\windows\run-node.ps1 -ReadToken "read-secret" -ControlToken "control-secret"
 ```
 
-长期运行时把配对码和 token 放在用户目录的 env 文件，避免写进计划任务命令行：
+长期运行时把 token 放在用户目录的 env 文件，避免写进计划任务命令行：
 
 ```text
 # %LOCALAPPDATA%\CodexMonitor\node.env
 CODEX_MONITOR_NETWORK_ID=home-lan
-CODEX_MONITOR_PAIR_CODE=Ab3dE7qK
 CODEX_MONITOR_READ_TOKEN=read-secret
 CODEX_MONITOR_CONTROL_TOKEN=control-secret
 ```
@@ -45,8 +44,8 @@ pwsh -File packaging\windows\install-task.ps1
 防火墙脚本需要管理员 PowerShell；先确认 WLAN 配置为 `Private`。脚本只开放本地网段所需
 端口，不改变 Codex CLI 或凭据目录。
 
-配对码是区分大小写的 8 位 ASCII 字母数字串。自动初次连接时两端配置相同的码；手动配对时
-输入目标对端的码，两端本地码不必相同。旧的 6 位环境变量必须更换，已保存的对端公钥不受影响。
+配对码是区分大小写的 8 位 ASCII 字母数字串。未配对节点只会被发现；在管理界面生成新码，
+并在发起端输入目标对端当前的码。刷新或一次成功配对会令旧码失效；已保存的对端公钥不受影响。
 
 Monitor 不保存 Codex 凭据，Agent 只连接本机的 Codex App Server。
 

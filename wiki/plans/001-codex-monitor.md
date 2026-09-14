@@ -6,6 +6,10 @@
 
 > 本文保留最初的 Windows Monitor + NixOS Agent 基线。去中心化节点方案已在
 > [`002-decentralized-mesh.md`](002-decentralized-mesh.md) 更新，后续实现以新方案为准。
+>
+> **历史档案：** 下文描述的是 2026-09-09 的初始方案和当时的目标/取舍，不是现行架构声明。
+> 特别是 Android 浏览器/PWA 首版、不建设原生 Android 业务层、单一 Windows Monitor 等内容均已被后续实现取代；
+> 当前 Android 是独立 P-256 peer 和原生持久仪表盘，详见 `002-decentralized-mesh.md` 与 `../../docs/android-compatibility.md`。
 
 ## 1. 目标和边界
 

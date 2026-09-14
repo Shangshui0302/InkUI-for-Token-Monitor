@@ -1,10 +1,12 @@
 # Codex Monitor 项目索引
 
-状态：`decentralized-p0-p6-in-progress`（2026-09-10）
+状态：`pc-mesh-p0-p6-implemented; android-peer-validated`（2026-09-14）
 
 这是一个面向 BOOX Poke3、NixOS 主机和 Windows 10 主机的 Codex 监控台项目。
-当前仓库已包含对等节点发现/配对、签名状态同步、P2 cursor/缓存、M3.1 Poke3 PWA（按钮分页、
-额度标签、日用量热力图、离线缓存）和可选只读 token；受限 interrupt 控制已接入，其他写操作未开放。
+PC 节点已实现对等发现/配对、签名状态同步、cursor/缓存和受限 interrupt。Poke3 已验证为
+Android API 29 独立 P-256 节点：持久身份/信任、一次性配对、原生持久概览/额度/动态/会话仪表盘，
+支持浅色、深色、电子墨水模式和节点改名。桌面 HTTP 18788 不可达时，原生面板仍可查看缓存快照。
+WebView/PWA 是可选兼容查看器，不是 Android 主界面；其他写操作未开放。
 
 ## 入口
 
