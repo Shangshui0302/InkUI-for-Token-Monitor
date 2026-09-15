@@ -1,7 +1,11 @@
 /target/
+**/target/
 /result
 /result-*/
 .direnv/
+apps/shell/src-tauri/target/
+p0-appserver-events.jsonl
+p0-approval.txt
 
 # Local runtime state and credentials
 .codex-monitor/

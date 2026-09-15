@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "P0 local shell capability",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

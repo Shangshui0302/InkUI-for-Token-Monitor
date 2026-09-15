@@ -1,0 +1,10 @@
+[package]
+name = "nekodex-appserver-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+nekodex-appserver-adapter = { path = "../appserver-adapter" }
+serde_json.workspace = true
+tokio.workspace = true
