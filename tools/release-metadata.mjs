@@ -18,16 +18,18 @@ const args = process.argv.slice(2);
 let requireClean = false;
 let androidApk;
 let expectedAndroidCertSha256;
+let nixOutput;
 const artifactArgs = [];
 for (let index = 0; index < args.length; index += 1) {
   const argument = args[index];
   if (argument === "--require-clean") {
     requireClean = true;
-  } else if (argument === "--android-apk" || argument === "--expected-android-cert-sha256") {
+  } else if (["--android-apk", "--expected-android-cert-sha256", "--nix-output"].includes(argument)) {
     const value = args[index + 1];
     if (!value || value.startsWith("--")) fail(`${argument} requires a value`);
     index += 1;
     if (argument === "--android-apk") androidApk = value;
+    else if (argument === "--nix-output") nixOutput = value;
     else expectedAndroidCertSha256 = value;
   } else if (argument.startsWith("--")) {
     fail(`unknown option: ${argument}`);
@@ -180,6 +182,57 @@ function verifyAndroidArtifact(argument) {
   };
 }
 
+function verifyNixOutput(argument) {
+  const path = resolve(process.cwd(), argument);
+  let stat;
+  try {
+    stat = statSync(path);
+  } catch (error) {
+    fail(`unable to inspect Nix output ${argument}: ${error.message}`);
+  }
+  if (!stat.isDirectory()) fail(`Nix output is not a directory: ${argument}`);
+
+  const program = join(path, "bin", "nekodex-shell");
+  const desktop = join(path, "share", "applications", "nekodex.desktop");
+  const icon = join(path, "share", "icons", "hicolor", "scalable", "apps", "nekodex.svg");
+  const license = join(path, "share", "licenses", "nekodex", "LICENSE");
+  if (!executable(program)) fail(`Nix output main program is missing or not executable: ${program}`);
+  for (const [label, requiredPath] of [["desktop entry", desktop], ["icon", icon], ["license", license]]) {
+    try {
+      if (!statSync(requiredPath).isFile()) fail(`Nix output ${label} is not a regular file: ${requiredPath}`);
+    } catch {
+      fail(`Nix output is missing ${label}: ${requiredPath}`);
+    }
+  }
+  if (!readFileSync(license).equals(readFileSync(resolve(root, "LICENSE")))) {
+    fail("Nix output license does not match the repository LICENSE");
+  }
+
+  const pathInfoText = runTool("nix", ["path-info", "--json", path], "Nix output metadata inspection");
+  let pathInfo;
+  try {
+    pathInfo = JSON.parse(pathInfoText);
+  } catch {
+    fail("Nix path-info returned invalid JSON");
+  }
+  const entries = Object.entries(pathInfo);
+  if (entries.length !== 1) fail("Nix path-info did not return exactly one output");
+  const [storePath, metadata] = entries[0];
+  if (typeof metadata.narHash !== "string" || typeof metadata.narSize !== "number") {
+    fail("Nix path-info omitted narHash or narSize");
+  }
+  return {
+    path: argument,
+    storePath,
+    narHash: metadata.narHash,
+    narBytes: metadata.narSize,
+    program: "bin/nekodex-shell",
+    desktop: "share/applications/nekodex.desktop",
+    icon: "share/icons/hicolor/scalable/apps/nekodex.svg",
+    license: "share/licenses/nekodex/LICENSE",
+  };
+}
+
 const artifacts = artifactArgs.map((argument) => {
   const path = resolve(process.cwd(), argument);
   const stat = statSync(path);
@@ -191,6 +244,7 @@ const artifacts = artifactArgs.map((argument) => {
   };
 });
 const android = androidApk ? verifyAndroidArtifact(androidApk) : null;
+const nix = nixOutput ? verifyNixOutput(nixOutput) : null;
 
 process.stdout.write(`${JSON.stringify({
   product: tauri.productName,
@@ -200,4 +254,5 @@ process.stdout.write(`${JSON.stringify({
   commit: git("rev-parse", "HEAD"),
   artifacts,
   android,
+  nix,
 }, null, 2)}\n`);
