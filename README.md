@@ -46,6 +46,8 @@ nix run path:.
 
 这两条命令使用锁定的 Nix 输入构建应用及其运行时依赖；`nix build` 不会把应用安装进系统，也不会触发 NixOS rebuild。自动化开发流程不得调用它们，也不得自动执行 `nixos-rebuild`。
 
+Nix derivation 使用源码白名单，不会把仓库旁的 `target/`、`apps/ui/node_modules`、`apps/ui/dist`、本地参考图片或其他未跟踪文件复制进构建源。新增构建期文件时必须同步审查该白名单，不能用重新放宽到整个工作区来解决缺失文件。
+
 Android 同样在 `arch` 容器中使用已准备的 SDK/NDK/JDK，并限制 Cargo 与 Gradle 并发：
 
 ```bash

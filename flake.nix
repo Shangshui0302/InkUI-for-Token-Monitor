@@ -26,10 +26,27 @@
         url = "https://registry.npmjs.org/scheduler/-/scheduler-0.28.0.tgz";
         hash = "sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==";
       };
+      frontendSource = pkgs.lib.sources.sourceByGlobs ./apps/ui [
+        "index.html"
+        "package.json"
+        "package-lock.json"
+        "src/**"
+        "styles.css"
+      ];
+      packageSource = pkgs.lib.sources.sourceByGlobs ./. [
+        "Cargo.lock"
+        "Cargo.toml"
+        "LICENSE"
+        "apps/**"
+        "crates/**"
+        "generated/**"
+        "plugins/**"
+        "tools/build-frontend.mjs"
+      ];
       frontend = pkgs.stdenvNoCC.mkDerivation {
         pname = "nekodex-frontend";
         version = "0.1.0";
-        src = ./apps/ui;
+        src = frontendSource;
         nativeBuildInputs = [ pkgs.esbuild pkgs.gnutar pkgs.gzip ];
         buildPhase = ''
           runHook preBuild
@@ -68,7 +85,7 @@
       nekodex = pkgs.rustPlatform.buildRustPackage {
         pname = "nekodex";
         version = "0.1.0";
-        src = ./.;
+        src = packageSource;
         cargoLock.lockFile = ./Cargo.lock;
         buildAndTestSubdir = "apps/shell/src-tauri";
         NEKODEX_FRONTEND_PREBUILT = "1";

@@ -213,6 +213,8 @@ P4 发布准备已开始：Android release Gradle 任务现从被忽略的外部
 
 Poke3 在屏幕点亮、Nekodex 前台且与 Linux 保持一条 8788 连接时完成一次有界性能快照：TOTAL PSS 80,877 KiB、SWAP PSS 223 KiB；10 秒空闲 CPU 三次采样为 0.0%、0.8%、0.6%，平均约 0.47%。同一时刻 Linux release RSS 为 152,192 KiB、累计 CPU 0.2%，进程已运行约 9.7 小时。该结果满足当前 PSS 与前台空闲 CPU 基线目标，但不替代长时间耗电、系统回收、滚动峰值或多节点验收；完整条件见 `docs/performance-snapshot.md`。
 
+Nix 包的主源码与 React 前端源码已改用锁定 nixpkgs 提供的 `lib.sources.sourceByGlobs` 白名单，`path:.` 打包不再把本地 `target/`、`node_modules`、`dist`、参考图片或其他未跟踪内容带入 derivation。`nix flake check path:. --no-build` 已通过；实际求值后的主源只包含 `Cargo.*`、LICENSE、apps/crates/generated/plugins 与前端构建脚本，前端源只包含 package 锁文件、HTML/CSS 和 `src/main.tsx`。该修改只收窄打包输入，没有更新 flake.lock、依赖或输出契约；为避免再次产生大体积 store 闭包，本轮没有运行 Nix 构建。
+
 监控主链路的代码纵切已经形成。当前剩余项以真实设备、恢复路径和长期性能验收为主；只有验收暴露出缺陷时才继续修改对应实现，不为扩大范围新增控制功能。
 
 实现边界已经冻结：以下条目是验收清单，不是继续扩张功能的待办。远程会话控制、文件/终端代理、云端中转、发布和未经实测的平台支持均延期到独立方案；它们不会阻塞当前只读监控版本的代码收尾。
