@@ -1,3 +1,4 @@
+import java.io.FileInputStream
 import java.util.Properties
 
 plugins {
@@ -13,6 +14,26 @@ val tauriProperties = Properties().apply {
     }
 }
 
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        FileInputStream(keystorePropertiesFile).use { load(it) }
+    }
+}
+val releaseRequested = gradle.startParameter.taskNames.any {
+    it.contains("release", ignoreCase = true)
+}
+if (releaseRequested && !keystorePropertiesFile.exists()) {
+    throw GradleException(
+        "Android release signing requires gen/android/keystore.properties; " +
+            "copy keystore.properties.example and keep the real file private."
+    )
+}
+
+fun releaseProperty(name: String): String = requireNotNull(keystoreProperties.getProperty(name)) {
+    "Missing Android release signing property: $name"
+}
+
 android {
     compileSdk = 36
     namespace = "dev.nekodex.workbench"
@@ -26,6 +47,16 @@ android {
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
         versionName = tauriProperties.getProperty("tauri.android.versionName", "1.0")
     }
+    signingConfigs {
+        if (keystorePropertiesFile.exists()) {
+            create("release") {
+                keyAlias = releaseProperty("keyAlias")
+                keyPassword = releaseProperty("keyPassword")
+                storeFile = rootProject.file(releaseProperty("storeFile"))
+                storePassword = releaseProperty("storePassword")
+            }
+        }
+    }
     buildTypes {
         getByName("debug") {
             isDebuggable = true
@@ -38,6 +69,7 @@ android {
             }
         }
         getByName("release") {
+            signingConfigs.findByName("release")?.let { signingConfig = it }
             isMinifyEnabled = true
             proguardFiles(
                 *fileTree(".") { include("**/*.pro") }
