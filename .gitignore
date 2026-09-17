@@ -20,3 +20,6 @@ p0-approval.txt
 # Editor and OS noise
 .DS_Store
 *.swp
+
+# Local design and research references
+/reference/
