@@ -1407,14 +1407,14 @@ fn protocol_error(error: &ServiceError) -> Option<ProtocolError> {
         ServiceError::UnknownProject(id) => ProtocolError::NotFound {
             resource: format!("project {id}"),
         },
-        ServiceError::ProjectPathNotAllowed(path) => ProtocolError::InvalidRequest {
-            message: format!("project path is not allowed: {path}"),
+        ServiceError::ProjectPathNotAllowed(_) => ProtocolError::InvalidRequest {
+            message: "project path is not allowed".into(),
         },
         ServiceError::Unsupported(operation) => ProtocolError::InvalidRequest {
             message: format!("unsupported capability: {operation}"),
         },
-        ServiceError::Rejected(message) => ProtocolError::InvalidRequest {
-            message: message.clone(),
+        ServiceError::Rejected(_) => ProtocolError::InvalidRequest {
+            message: "source rejected the monitoring request".into(),
         },
         ServiceError::StaleGeneration { expected, actual } => {
             ProtocolError::StaleProcessGeneration {
@@ -2848,5 +2848,25 @@ mod tests {
         let (projects, invalid) = normalize_projects(vec![project]);
         assert!(invalid.contains("missing"));
         assert_eq!(projects["missing"].path, "/definitely/not-a-project");
+    }
+
+    #[test]
+    fn remote_protocol_errors_do_not_expose_source_paths_or_backend_messages() {
+        assert_eq!(
+            protocol_error(&ServiceError::ProjectPathNotAllowed(
+                "/private/source/project".into()
+            )),
+            Some(ProtocolError::InvalidRequest {
+                message: "project path is not allowed".into(),
+            })
+        );
+        assert_eq!(
+            protocol_error(&ServiceError::Rejected(
+                "backend mentioned /private/source/project and a token".into()
+            )),
+            Some(ProtocolError::InvalidRequest {
+                message: "source rejected the monitoring request".into(),
+            })
+        );
     }
 }
