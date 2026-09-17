@@ -215,6 +215,8 @@ Poke3 在屏幕点亮、Nekodex 前台且与 Linux 保持一条 8788 连接时�
 
 Nix 包的主源码与 React 前端源码已改用锁定 nixpkgs 提供的 `lib.sources.sourceByGlobs` 白名单，`path:.` 打包不再把本地 `target/`、`node_modules`、`dist`、参考图片或其他未跟踪内容带入 derivation。`nix flake check path:. --no-build` 已通过；实际求值后的主源只包含 `Cargo.*`、LICENSE、apps/crates/generated/plugins 与前端构建脚本，前端源只包含 package 锁文件、HTML/CSS 和 `src/main.tsx`。该修改只收窄打包输入，没有更新 flake.lock、依赖或输出契约；为避免再次产生大体积 store 闭包，本轮没有运行 Nix 构建。
 
+`app_environment` 现在返回编译进 Rust 壳层的 Nekodex 版本，PC 与 Android 共用页头会同时显示平台、版本和 IPC 状态。覆盖升级后可以直接在应用内核对实际运行版本，而不再只依赖 APK 文件名或外部包管理器；该字段只读且不增加轮询。统一前端生产打包通过，`dist/app.js` 为 273.0 kB；本轮没有重建 Rust 壳层或 Android 包。
+
 监控主链路的代码纵切已经形成。当前剩余项以真实设备、恢复路径和长期性能验收为主；只有验收暴露出缺陷时才继续修改对应实现，不为扩大范围新增控制功能。
 
 实现边界已经冻结：以下条目是验收清单，不是继续扩张功能的待办。远程会话控制、文件/终端代理、云端中转、发布和未经实测的平台支持均延期到独立方案；它们不会阻塞当前只读监控版本的代码收尾。

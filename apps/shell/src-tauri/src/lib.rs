@@ -32,6 +32,7 @@ fn platform_events<R: Runtime>() -> TauriPlugin<R> {
 #[serde(rename_all = "camelCase")]
 struct AppEnvironment {
     platform: &'static str,
+    version: &'static str,
     local_assets: bool,
     ipc_available: bool,
 }
@@ -40,6 +41,7 @@ struct AppEnvironment {
 fn app_environment() -> AppEnvironment {
     AppEnvironment {
         platform: std::env::consts::OS,
+        version: env!("CARGO_PKG_VERSION"),
         local_assets: true,
         ipc_available: true,
     }

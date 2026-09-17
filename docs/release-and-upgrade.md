@@ -23,6 +23,8 @@ node tools/release-metadata.mjs --require-clean path/to/nekodex.apk path/to/linu
 
 唯一用户可见版本来自 `apps/shell/src-tauri/tauri.conf.json` 的顶层 `version`。Rust crate 和 Nix 包在发布提交中必须使用相同版本。
 
+运行中的 PC 与 Android 应用会在统一页头显示由 Rust 包编译进入二进制的 Nekodex 版本。升级验收应同时核对页头版本、Android `versionCode` 和制品清单，不能只根据安装文件名判断正在运行的版本。
+
 Android 默认使用 Tauri 的确定性映射：`versionCode = major * 1,000,000 + minor * 1,000 + patch`。每次覆盖升级都必须提升语义版本，从而保证 `versionCode` 严格递增；不要依赖生成文件中仅供非 Tauri 调用兜底的 `1`/`1.0`。
 
 ## Android release 签名

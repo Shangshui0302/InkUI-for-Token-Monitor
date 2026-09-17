@@ -1402,8 +1402,8 @@ function App() {
 
   useEffect(() => { document.documentElement.dataset.theme = theme; }, [theme]);
   useEffect(() => {
-    invoke<{ platform: string }>("app_environment").then((environment) => {
-      setRuntime(`${environment.platform} · 本地资源 · IPC 正常`); setRuntimeOk(true);
+    invoke<{ platform: string; version: string }>("app_environment").then((environment) => {
+      setRuntime(`${environment.platform} · Nekodex ${environment.version} · 本地资源 · IPC 正常`); setRuntimeOk(true);
     }).catch((caught) => setRuntime(message(caught)));
   }, []);
 
