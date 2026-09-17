@@ -1,5 +1,7 @@
 # Nekodex 运行手册
 
+> 本手册描述当前待退役实现。新的运行方式将按 [简化监控架构](simplified-monitor-architecture.md) 改为“来源电脑本机文件只读采集器 + HTTP 状态接口 + PC/Poke3 统一前端”。迁移完成前，不再围绕共享 daemon、独立 App Server、事件回放或来源重启扩大排障和功能。
+
 本文面向首批支持环境：NixOS/Linux 来源电脑与 Poke3 Android 10 监控端。Nekodex 当前只读，不会远程创建、发送、停止任务或处理审批。
 
 ## 首次使用
