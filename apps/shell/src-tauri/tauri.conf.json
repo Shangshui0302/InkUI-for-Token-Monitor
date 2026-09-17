@@ -27,6 +27,9 @@
   "bundle": {
     "active": true,
     "icon": ["icons/icon.png"],
+    "resources": {
+      "../../../LICENSE": "LICENSE"
+    },
     "android": {
       "minSdkVersion": 29
     }

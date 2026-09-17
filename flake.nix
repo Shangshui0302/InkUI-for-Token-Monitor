@@ -116,6 +116,7 @@
           install -Dm644 ${./apps/shell/src-tauri/icons/icon.svg} "$out/share/icons/hicolor/scalable/apps/nekodex.svg"
           install -Dm644 ${desktopItem}/share/applications/nekodex.desktop \
             "$out/share/applications/nekodex.desktop"
+          install -Dm644 ${./LICENSE} "$out/share/licenses/nekodex/LICENSE"
         '';
 
         meta = with pkgs.lib; {
