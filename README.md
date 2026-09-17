@@ -2,7 +2,7 @@
 
 局域网内的个人 Codex 设备组。设备一次入组后共享成员资格，额度、活动、会话和待审批状态直接由对应电脑提供；PC 与 Android 使用同一套前端。
 
-当前产品边界为只读监控：不提供远程创建、发送消息、停止任务或处理审批。设备组三节点、跨设备数据一致性和长期性能仍待集成验收：
+当前产品边界为只读监控：不提供远程创建、发送消息、停止任务或处理审批。三节点入组及原来源节点暂停后的其余节点直连已有一次真实运行证据；跨设备全页面数据一致性、恢复路径和长期性能仍待集成验收：
 
 电脑来源优先连接已经运行的官方本地共享 App Server daemon，从而读取该 daemon 已加载会话的实时状态；daemon 不可用时回退到独立只读 App Server。回退模式仍可读取额度和持久化历史，但界面不会把 `notLoaded` 或不可见的审批误报成实时状态。用户可以在本机界面明确调用官方共享 daemon 命令；应用不会在后台静默修改它。该命令当前要求 Codex 安装器管理的 standalone CLI，Nix 打包的 CLI 会保留历史回退来源并显示官方失败原因。
 
@@ -61,7 +61,7 @@ export GRADLE_OPTS="${GRADLE_OPTS:+$GRADLE_OPTS }-Dorg.gradle.workers.max=1"
 cargo tauri android build --debug --target aarch64
 ```
 
-当前只读监控版 Android Debug 包已在 Poke3 真机构建安装并验证统一安装内页面、本地 IPC、创建设备组、本机重命名及普通退到桌面后的前台连接服务保活。Poke3 已与 Linux 来源电脑完成认证配对，并通过固定 TCP 8788 读取到真实账户额度快照；Android 端不运行 Codex，只读查看额度、用量、项目、会话和待审批状态。系统回收恢复、长时间性能及更多页面的数据一致性仍待验收。最新证据见 `docs/implementation-status.md`，历史 P0 证据见 `docs/p0-android-report.md`。
+当前只读监控版 Android Debug 包已在 Poke3 真机构建安装并验证统一安装内页面、本地 IPC、创建设备组、本机重命名及普通退到桌面后的前台连接服务保活。Poke3 已与 Linux 来源电脑完成认证配对，并通过固定 TCP 8788 读取到真实账户额度快照；Android 端不运行 Codex，只读查看额度、用量、项目、会话和待审批状态。另一次三节点走查中，Poke3 成功邀请 MyLabWin 的 WSL Arch 临时节点；暂停 MechRevo-NixOS 来源节点约一分钟时，Poke3 与 MyLabWin 仍保持在线。该证据只覆盖 WSL 临时验证，不代表原生 Windows 支持。系统回收恢复、长时间性能及更多页面的数据一致性仍待验收；Poke3 当前安装包也落后于仓库最新 `main`，正式验收前需要重新部署。最新证据见 `docs/implementation-status.md`，历史 P0 证据见 `docs/p0-android-report.md`。
 
 首次入组、网络要求、来源模式、后台行为与故障恢复见 [docs/operations.md](docs/operations.md)。
 
