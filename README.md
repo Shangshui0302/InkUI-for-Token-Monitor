@@ -63,4 +63,6 @@ cargo tauri android build --debug --target aarch64
 
 首批发布产物、Android 外部签名配置、版本递增规则、覆盖升级的数据保留边界与尚待验收项目见 [docs/release-and-upgrade.md](docs/release-and-upgrade.md)。正式发布、上传制品或创建签名密钥仍需单独授权。
 
+`node tools/release-metadata.mjs` 可在不触发构建的情况下检查 Tauri、Cargo 与 Nix 版本一致性；传入制品路径时还会输出大小和 SHA-256 清单。
+
 P0 曾使用会话写入与审批探针验证上游 App Server 能力；当前产品已冻结为只读监控，这些可执行探针不再随工作树保留，避免被误当成当前开发入口。历史结论见 [docs/p0-closeout.md](docs/p0-closeout.md)，完整目标与阶段门禁见 [REWRITE-PLAN.md](REWRITE-PLAN.md)；旧探针和旧实现可从 Git 历史提交 `e09a1a7` 查看。

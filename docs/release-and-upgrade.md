@@ -10,6 +10,15 @@
 
 构建输出不是发布。正式制品必须同时记录 Git 提交、应用版本、Android `versionCode`、目标架构、文件大小和 SHA-256；不得把构建缓存、密钥库或 `keystore.properties` 放进仓库。
 
+发布提交完成后先运行元数据检查；传入制品路径时会同时生成包含大小和 SHA-256 的 JSON 清单：
+
+```bash
+node tools/release-metadata.mjs --require-clean
+node tools/release-metadata.mjs --require-clean path/to/nekodex.apk path/to/linux-package
+```
+
+该工具要求 `tauri.conf.json`、Cargo workspace 和 Nix 包版本完全一致，并按 Tauri 的 Android 映射计算 `versionCode`。它不构建、签名或上传制品。
+
 ## 版本规则
 
 唯一用户可见版本来自 `apps/shell/src-tauri/tauri.conf.json` 的顶层 `version`。Rust crate 和 Nix 包在发布提交中必须使用相同版本。
