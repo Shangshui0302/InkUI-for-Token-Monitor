@@ -31,6 +31,7 @@ use tokio::task::{JoinHandle, JoinSet};
 
 const EVENT_CACHE_LIMIT: usize = 256;
 const LAN_PORT: u16 = 8_788;
+const RECOVERY_WARNING: &str = "本机活动缓存暂时无法更新，正在自动恢复";
 static NEXT_CONNECTION_TOKEN: AtomicU64 = AtomicU64::new(1);
 
 struct EventCache {
@@ -1303,7 +1304,7 @@ async fn run_authenticated_session<S: TransportIo + 'static>(
                     recovery_status
                         .write()
                         .await
-                        .insert(recovery_peer.clone(), error);
+                        .insert(recovery_peer.clone(), RECOVERY_WARNING.to_owned());
                 }
             }
         }
@@ -1381,7 +1382,11 @@ async fn run_authenticated_session<S: TransportIo + 'static>(
                 } else {
                     let storage = node.storage();
                     if let Err(error) = cache_event(&events, &storage, event).await {
-                        recovery_warnings.write().await.insert(peer.clone(), error);
+                        eprintln!("unable to cache source event from {peer}: {error}");
+                        recovery_warnings
+                            .write()
+                            .await
+                            .insert(peer.clone(), RECOVERY_WARNING.to_owned());
                         match recovery_tx.try_send(()) {
                             Ok(()) | Err(mpsc::error::TrySendError::Full(())) => {}
                             Err(mpsc::error::TrySendError::Closed(())) => break,
