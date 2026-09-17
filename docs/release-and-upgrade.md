@@ -17,9 +17,12 @@ Tauri 平台安装包会把仓库根目录的 `LICENSE` 作为资源携带；Nix
 ```bash
 node tools/release-metadata.mjs --require-clean
 node tools/release-metadata.mjs --require-clean path/to/nekodex.apk path/to/linux-package
+node tools/release-metadata.mjs --require-clean --android-apk path/to/nekodex.apk
+node tools/release-metadata.mjs --require-clean --android-apk path/to/nekodex.apk \
+  --expected-android-cert-sha256 PREVIOUS_RELEASE_CERT_SHA256
 ```
 
-该工具要求 `tauri.conf.json`、Cargo workspace 和 Nix 包版本完全一致，并按 Tauri 的 Android 映射计算 `versionCode`。它不构建、签名或上传制品。
+该工具要求 `tauri.conf.json`、Cargo workspace 和 Nix 包版本完全一致，并按 Tauri 的 Android 映射计算 `versionCode`。普通制品参数只记录大小与 SHA-256；使用 `--android-apk` 时还会通过 Android SDK Build Tools 严格检查包名、`versionCode`、`versionName`、签名有效性并记录签名证书 SHA-256。覆盖升级发布应传入上一正式版本的证书摘要；缺少 `aapt` 或 `apksigner` 时检查直接失败，不降级为“已验证”。它不构建、签名或上传制品。
 
 ## 版本规则
 
