@@ -97,6 +97,7 @@ dialog::backdrop { background: rgb(0 0 0 / 35%); }
 :root[data-theme="dark"] { background: #171815; --text: #f3f3ec; --muted: #b9bab1; --surface: #242520; --input: #1d1e1a; --line: #b5b6ad; --accent: #e0a36e; --soft: #30312b; }
 :root[data-theme="eink"] { background: #f7f7f2; --text: #111; --muted: #4d4e48; --surface: #fff; --input: #fff; --line: #111; --soft: #fff; }
 :root[data-theme="eink"] *, :root[data-theme="eink"] *::before, :root[data-theme="eink"] *::after { animation: none !important; transition: none !important; box-shadow: none !important; }
+:root[data-theme="eink"] input, :root[data-theme="eink"] textarea, :root[data-theme="eink"] [contenteditable="true"] { caret-color: transparent; }
 
 @media (max-width: 700px) {
   .app-shell { padding: 12px; }
