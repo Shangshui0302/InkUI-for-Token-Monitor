@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nekodex_connection_channel_name">Nekodex 设备连接</string>
+    <string name="nekodex_connection_channel_description">在后台维持本机设备组连接</string>
+    <string name="nekodex_connection_title">Nekodex 正在保持连接</string>
+    <string name="nekodex_connection_text">局域网设备连接正在后台运行</string>
+</resources>

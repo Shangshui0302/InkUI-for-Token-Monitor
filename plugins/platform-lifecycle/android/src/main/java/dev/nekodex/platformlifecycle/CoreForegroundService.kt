@@ -48,10 +48,10 @@ class CoreForegroundService : Service() {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "Nekodex device connection",
+            getString(R.string.nekodex_connection_channel_name),
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "Keeps local device connections available in the background"
+            description = getString(R.string.nekodex_connection_channel_description)
             setShowBadge(false)
         }
         getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
@@ -70,10 +70,11 @@ class CoreForegroundService : Service() {
         val icon = applicationInfo.icon.takeIf { it != 0 } ?: android.R.drawable.stat_notify_sync
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(icon)
-            .setContentTitle("Nekodex is connected")
-            .setContentText("Local device connections are active")
+            .setContentTitle(getString(R.string.nekodex_connection_title))
+            .setContentText(getString(R.string.nekodex_connection_text))
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setContentIntent(contentIntent)

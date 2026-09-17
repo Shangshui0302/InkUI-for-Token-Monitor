@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nekodex_connection_channel_name">Nekodex device connection</string>
+    <string name="nekodex_connection_channel_description">Keeps local device connections available in the background</string>
+    <string name="nekodex_connection_title">Nekodex is connected</string>
+    <string name="nekodex_connection_text">Local device connections are active</string>
+</resources>
