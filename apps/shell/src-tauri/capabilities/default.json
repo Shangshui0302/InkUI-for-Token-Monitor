@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "P0 local shell capability",
+  "description": "Local shell capability for the monitoring-only client",
   "windows": ["main"],
-  "permissions": ["core:default"]
+  "permissions": []
 }

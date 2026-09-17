@@ -12,6 +12,18 @@ pub struct GroupCreated {
     pub event_id: String,
     pub group_id: String,
     pub member_id: String,
+    #[serde(default)]
+    pub profile: Option<MemberProfile>,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MemberProfile {
+    pub device_id: String,
+    pub name: String,
+    pub signing_public_key: [u8; 32],
+    pub noise_public_key: [u8; 32],
+    pub codex_capable: bool,
+    pub protocol_version: u16,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -20,6 +32,8 @@ pub struct MemberAdded {
     pub member_id: String,
     pub issuer_id: String,
     pub parents: BTreeSet<String>,
+    #[serde(default)]
+    pub profile: Option<MemberProfile>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
@@ -31,10 +45,20 @@ pub struct MemberRevoked {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+pub struct MemberRenamed {
+    pub event_id: String,
+    pub member_id: String,
+    pub issuer_id: String,
+    pub parents: BTreeSet<String>,
+    pub name: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
 pub enum MembershipEvent {
     GroupCreated(GroupCreated),
     Added(MemberAdded),
     Revoked(MemberRevoked),
+    Renamed(MemberRenamed),
 }
 
 impl MembershipEvent {
@@ -43,6 +67,7 @@ impl MembershipEvent {
             Self::GroupCreated(event) => &event.event_id,
             Self::Added(event) => &event.event_id,
             Self::Revoked(event) => &event.event_id,
+            Self::Renamed(event) => &event.event_id,
         }
     }
 
@@ -51,6 +76,7 @@ impl MembershipEvent {
             Self::GroupCreated(_) => None,
             Self::Added(event) => Some(&event.parents),
             Self::Revoked(event) => Some(&event.parents),
+            Self::Renamed(event) => Some(&event.parents),
         }
     }
 
@@ -59,6 +85,7 @@ impl MembershipEvent {
             Self::GroupCreated(_) => None,
             Self::Added(event) => Some(&event.issuer_id),
             Self::Revoked(event) => Some(&event.issuer_id),
+            Self::Renamed(event) => Some(&event.issuer_id),
         }
     }
 }
@@ -70,7 +97,7 @@ pub enum EventState {
     Invalid(&'static str),
 }
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct MembershipLog {
     events: BTreeMap<String, MembershipEvent>,
     authenticated: BTreeMap<String, signing::SignedMembershipEvent>,
@@ -91,6 +118,46 @@ impl MembershipLog {
 
     pub fn signed_event(&self, event_id: &str) -> Option<&signing::SignedMembershipEvent> {
         self.authenticated.get(event_id)
+    }
+
+    /// Iterate over authenticated envelopes in deterministic event-id order.
+    /// Pending and invalid events are included so peers can exchange the full
+    /// evidence needed to resolve out-of-order arrivals.
+    pub fn signed_events(&self) -> impl Iterator<Item = &signing::SignedMembershipEvent> {
+        self.authenticated.values()
+    }
+
+    pub fn authenticated_event_ids(&self) -> BTreeSet<String> {
+        self.authenticated.keys().cloned().collect()
+    }
+
+    /// Return valid authenticated events that are not parents of another valid
+    /// authenticated event. New membership changes should name this frontier
+    /// as their direct causal parents.
+    pub fn authenticated_frontier(&self) -> BTreeSet<String> {
+        let states = self.evaluate();
+        let valid: BTreeSet<_> = self
+            .authenticated
+            .keys()
+            .filter(|id| states.get(*id) == Some(&EventState::Valid))
+            .cloned()
+            .collect();
+        let referenced: BTreeSet<_> = self
+            .events
+            .iter()
+            .filter(|(id, _)| valid.contains(*id))
+            .filter_map(|(_, event)| event.parents())
+            .flatten()
+            .filter(|parent| valid.contains(*parent))
+            .cloned()
+            .collect();
+        valid.difference(&referenced).cloned().collect()
+    }
+
+    /// An authenticated connection must never rely on an event inserted only
+    /// through internal test construction.
+    pub fn is_fully_authenticated(&self) -> bool {
+        self.events.len() == self.authenticated.len()
     }
 
     /// Pin every currently valid, authenticated event as a device-local
@@ -157,6 +224,7 @@ impl MembershipLog {
                     MembershipEvent::GroupCreated(value) => value.member_id == member_id,
                     MembershipEvent::Added(value) => value.member_id == member_id,
                     MembershipEvent::Revoked(_) => false,
+                    MembershipEvent::Renamed(_) => false,
                 }
         })
     }
@@ -226,7 +294,13 @@ impl MembershipLog {
 
                 let history = self.ancestor_ids(parents);
                 let issuer = event.issuer_id().expect("non-genesis event has issuer");
-                if !self.member_in_history(issuer, &history, &states) {
+                if matches!(event, MembershipEvent::Renamed(value) if value.member_id != value.issuer_id)
+                {
+                    states.insert(
+                        id.clone(),
+                        EventState::Invalid("members may only rename themselves"),
+                    );
+                } else if !self.member_in_history(issuer, &history, &states) {
                     states.insert(
                         id.clone(),
                         EventState::Invalid("issuer is not active in causal history"),
@@ -293,6 +367,7 @@ impl MembershipLog {
             MembershipEvent::GroupCreated(value) => value.member_id == member_id,
             MembershipEvent::Added(value) => value.member_id == member_id,
             MembershipEvent::Revoked(_) => false,
+            MembershipEvent::Renamed(_) => false,
         });
         let revoked = events.iter().any(|event| {
             matches!(event, MembershipEvent::Revoked(value) if value.member_id == member_id)
@@ -314,6 +389,7 @@ mod tests {
             event_id: "genesis".into(),
             group_id: "group-1".into(),
             member_id: "a".into(),
+            profile: None,
         })
     }
 
@@ -328,6 +404,7 @@ mod tests {
             member_id: member_id.into(),
             issuer_id: issuer_id.into(),
             parents: parents(parent_ids),
+            profile: None,
         })
     }
 
@@ -376,6 +453,50 @@ mod tests {
             assert!(!log.is_member("b"));
             assert!(log.is_revoked("b"));
         }
+    }
+
+    #[test]
+    fn authenticated_iteration_and_frontier_only_expose_signed_evidence() {
+        use ed25519_dalek::SigningKey;
+        use signing::{SignedMembershipEvent, member_id_for_key};
+
+        let a = SigningKey::from_bytes(&[21; 32]);
+        let b = SigningKey::from_bytes(&[22; 32]);
+        let a_id = member_id_for_key(&a.verifying_key());
+        let b_id = member_id_for_key(&b.verifying_key());
+        let mut log = MembershipLog::default();
+        for event in [
+            MembershipEvent::GroupCreated(GroupCreated {
+                event_id: "root".into(),
+                group_id: "group".into(),
+                member_id: a_id.clone(),
+                profile: None,
+            }),
+            MembershipEvent::Added(MemberAdded {
+                event_id: "add-b".into(),
+                member_id: b_id,
+                issuer_id: a_id,
+                parents: ["root".into()].into(),
+                profile: None,
+            }),
+        ] {
+            log.insert_signed(
+                "group",
+                SignedMembershipEvent::sign("group", event, &a).unwrap(),
+            )
+            .unwrap();
+        }
+
+        assert!(log.is_fully_authenticated());
+        assert_eq!(
+            log.authenticated_event_ids(),
+            BTreeSet::from(["add-b".into(), "root".into()])
+        );
+        assert_eq!(
+            log.authenticated_frontier(),
+            BTreeSet::from(["add-b".into()])
+        );
+        assert_eq!(log.signed_events().count(), 2);
     }
 
     #[test]

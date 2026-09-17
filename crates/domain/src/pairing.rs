@@ -9,6 +9,7 @@ const KEY_DOMAIN: &[u8] = b"nekodex/pairing-session-key/v1";
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PairingContext {
     pub group_id: Vec<u8>,
+    pub group_name: Vec<u8>,
     pub inviter_id: Vec<u8>,
     pub joiner_id: Vec<u8>,
     pub inviter_nonce: [u8; 32],
@@ -68,6 +69,7 @@ impl PairingContext {
         let mut digest = Sha256::new();
         digest.update(CONTEXT_DOMAIN);
         update_field(&mut digest, &self.group_id);
+        update_field(&mut digest, &self.group_name);
         update_field(&mut digest, &self.inviter_id);
         update_field(&mut digest, &self.joiner_id);
         update_field(&mut digest, &self.inviter_nonce);
@@ -167,6 +169,7 @@ mod tests {
     fn context() -> PairingContext {
         PairingContext {
             group_id: b"group".to_vec(),
+            group_name: b"My devices".to_vec(),
             inviter_id: b"device-a".to_vec(),
             joiner_id: b"device-b".to_vec(),
             inviter_nonce: [1; 32],
@@ -194,6 +197,23 @@ mod tests {
             &joiner_result,
             &inviter_result.confirmation,
             b"inviter"
+        ));
+    }
+
+    #[test]
+    fn group_name_is_authenticated_by_the_pairing_context() {
+        let code = b"492817";
+        let inviter_context = context();
+        let mut joiner_context = context();
+        joiner_context.group_name = b"tampered name".to_vec();
+        let (inviter, inviter_message) = inviter_context.start_inviter(code);
+        let (joiner, joiner_message) = joiner_context.start_joiner(code);
+        let inviter_result = inviter.finish(&joiner_message).unwrap();
+        let joiner_result = joiner.finish(&inviter_message).unwrap();
+        assert!(!PairingHandshake::verify_peer(
+            &inviter_result,
+            &joiner_result.confirmation,
+            b"joiner",
         ));
     }
 

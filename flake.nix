@@ -1,5 +1,5 @@
 {
-  description = "Codex cross-device workbench P0 development environment";
+  description = "Nekodex cross-device monitoring application";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
@@ -13,51 +13,110 @@
       pkgs = import nixpkgs {
         inherit system;
         overlays = [ rust-overlay.overlays.default ];
-        config = {
-          allowUnfree = true;
-          android_sdk.accept_license = true;
-        };
       };
-      rust = pkgs.rust-bin.stable.latest.default.override {
-        targets = [
-          "aarch64-linux-android"
-          "armv7-linux-androideabi"
-          "i686-linux-android"
-          "x86_64-linux-android"
-        ];
+      reactSource = pkgs.fetchurl {
+        url = "https://registry.npmjs.org/react/-/react-19.3.0.tgz";
+        hash = "sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog==";
       };
-      android = pkgs.androidenv.composeAndroidPackages {
-        platformVersions = [ "35" "36" ];
-        buildToolsVersions = [ "35.0.0" "36.0.0" ];
-        includeNDK = true;
-        ndkVersions = [ "28.0.13004108" ];
-        includeEmulator = false;
-        includeSystemImages = false;
+      reactDomSource = pkgs.fetchurl {
+        url = "https://registry.npmjs.org/react-dom/-/react-dom-19.3.0.tgz";
+        hash = "sha512-JDk8dgif51OjFoDE70+OT9ICyYr+69HlmihNwp1+Nsfbna3t5sIiCa9ZJktDmQ4/1b/rn26hIAR2uYXDMr5r0Q==";
       };
-      desktopPackages = with pkgs; [
-        rust
-        cargo-tauri
-        nodejs
-        pkg-config
-        webkitgtk_4_1
-        libsoup_3
-        openssl
-      ];
-    in {
-      devShells.${system} = {
-        default = pkgs.mkShell {
-          packages = desktopPackages;
-        };
+      schedulerSource = pkgs.fetchurl {
+        url = "https://registry.npmjs.org/scheduler/-/scheduler-0.28.0.tgz";
+        hash = "sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==";
+      };
+      frontend = pkgs.stdenvNoCC.mkDerivation {
+        pname = "nekodex-frontend";
+        version = "0.1.0";
+        src = ./apps/ui;
+        nativeBuildInputs = [ pkgs.esbuild pkgs.gnutar pkgs.gzip ];
+        buildPhase = ''
+          runHook preBuild
+          mkdir -p node_modules/react node_modules/react-dom node_modules/scheduler
+          tar -xzf ${reactSource} --strip-components=1 -C node_modules/react
+          tar -xzf ${reactDomSource} --strip-components=1 -C node_modules/react-dom
+          tar -xzf ${schedulerSource} --strip-components=1 -C node_modules/scheduler
+          esbuild src/main.tsx \
+            --bundle \
+            --minify \
+            --format=iife \
+            --target=chrome108 \
+            --jsx=automatic \
+            --define:process.env.NODE_ENV='"production"' \
+            --outfile=app.js
+          runHook postBuild
+        '';
+        installPhase = ''
+          runHook preInstall
+          install -Dm644 index.html "$out/index.html"
+          install -Dm644 styles.css "$out/styles.css"
+          install -Dm644 app.js "$out/app.js"
+          runHook postInstall
+        '';
+      };
+      desktopItem = pkgs.makeDesktopItem {
+        name = "nekodex";
+        desktopName = "Nekodex";
+        genericName = "Codex Cross-device Monitor";
+        comment = "Monitor trusted Codex source computers on the local network";
+        exec = "nekodex-shell";
+        icon = "nekodex";
+        categories = [ "Development" ];
+        terminal = false;
+      };
+      nekodex = pkgs.rustPlatform.buildRustPackage {
+        pname = "nekodex";
+        version = "0.1.0";
+        src = ./.;
+        cargoLock.lockFile = ./Cargo.lock;
+        buildAndTestSubdir = "apps/shell/src-tauri";
+        NEKODEX_FRONTEND_PREBUILT = "1";
 
-        android = pkgs.mkShell {
-          packages = with pkgs; [
-            jdk17_headless
-            android.androidsdk
-          ] ++ desktopPackages;
-          ANDROID_HOME = "${android.androidsdk}/libexec/android-sdk";
-          NDK_HOME = "${android.androidsdk}/libexec/android-sdk/ndk/28.0.13004108";
-          JAVA_HOME = "${pkgs.jdk17_headless}/lib/openjdk";
+        postPatch = ''
+          rm -rf apps/ui/dist
+          ln -s ${frontend} apps/ui/dist
+        '';
+
+        nativeBuildInputs = with pkgs; [
+          pkg-config
+          wrapGAppsHook4
+        ];
+        buildInputs = with pkgs; [
+          glib-networking
+          libsoup_3
+          openssl
+          webkitgtk_4_1
+        ];
+
+        # Focused tests run in development; the package build proves the
+        # sandboxed release artifact without repeating the whole workspace.
+        doCheck = false;
+
+        postInstall = ''
+          rm -f "$out/lib/libnekodex_shell_lib.a" "$out/lib/libnekodex_shell_lib.so"
+          rmdir --ignore-fail-on-non-empty "$out/lib"
+          install -Dm644 ${./apps/shell/src-tauri/icons/icon.svg} "$out/share/icons/hicolor/scalable/apps/nekodex.svg"
+          install -Dm644 ${desktopItem}/share/applications/nekodex.desktop \
+            "$out/share/applications/nekodex.desktop"
+        '';
+
+        meta = with pkgs.lib; {
+          description = "Decentralized local-network Codex monitor";
+          license = licenses.mit;
+          mainProgram = "nekodex-shell";
+          platforms = platforms.linux;
         };
+      };
+    in {
+      packages.${system} = {
+        inherit frontend nekodex;
+        default = nekodex;
+      };
+
+      apps.${system}.default = {
+        type = "app";
+        program = "${pkgs.lib.getExe nekodex}";
       };
     };
 }

@@ -4,81 +4,11 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
     <meta name="color-scheme" content="light dark" />
-    <title>Nekodex P0</title>
+    <title>Nekodex</title>
     <link rel="stylesheet" href="./styles.css" />
     <script type="module" src="./app.js"></script>
   </head>
   <body>
-    <main class="app-shell">
-      <header>
-        <div>
-          <p class="eyebrow">P0 可行性验证</p>
-          <h1>Nekodex</h1>
-          <p id="runtime-status">正在检查本地界面与 IPC…</p>
-        </div>
-        <button id="theme-button" type="button">切换主题</button>
-      </header>
-
-      <nav aria-label="工作台页面">
-        <button class="active" type="button" data-target="overview" aria-current="page">总览</button>
-        <button type="button" data-target="quota">额度</button>
-        <button type="button" data-target="activity">活动</button>
-        <button type="button" data-target="threads">会话</button>
-      </nav>
-
-      <section data-panel="overview">
-        <section class="summary" aria-label="状态摘要">
-          <article><strong>2</strong><span>开发主机</span></article>
-          <article><strong>1</strong><span>账户</span></article>
-          <article class="inverted"><strong>1</strong><span>运行中</span></article>
-          <article><strong>1</strong><span>需关注</span></article>
-        </section>
-
-        <section class="grid">
-          <article class="card">
-            <div class="card-heading"><h2>额度摘要</h2><button type="button">查看额度</button></div>
-            <p class="label">codex · 一周限制</p>
-            <strong class="quota">56%</strong>
-            <div class="dots" aria-hidden="true"></div>
-            <div class="meter"><span></span></div>
-            <p>重置 9/20 00:06（4 天后）</p>
-          </article>
-          <article class="card">
-            <div class="card-heading"><h2>节点状态</h2><span class="count">2</span></div>
-            <div class="node"><div><strong>NixOS 工作站</strong><p>采集正常 · 1 个运行中</p></div><span>在线</span></div>
-            <div class="node"><div><strong>Poke3</strong><p>控制端 · 本地资源</p></div><span>本机</span></div>
-          </article>
-        </section>
-
-        <section class="card checks">
-          <h2>真机交互检查</h2>
-          <label for="input-check">中文输入与软键盘</label>
-          <input id="input-check" placeholder="在 Poke3 上输入测试文字" />
-          <button id="websocket-button" type="button">测试本机 WebSocket</button>
-          <output id="websocket-status">尚未测试</output>
-          <button id="appserver-button" type="button">运行桌面 App Server 验证</button>
-          <output id="appserver-status">仅在明确点击后创建临时任务</output>
-          <button id="dialog-button" type="button">打开审批弹层</button>
-        </section>
-      </section>
-
-      <section class="card placeholder-panel" data-panel="quota" hidden>
-        <h2>额度</h2>
-        <p>同一账户只计一次；数据来自 NixOS 工作站，采集时间 14:05。</p>
-      </section>
-      <section class="card placeholder-panel" data-panel="activity" hidden>
-        <h2>活动</h2>
-        <p>事件流占位页，用于验证 PC 与 Poke3 使用同一导航和页面状态。</p>
-      </section>
-      <section class="card placeholder-panel" data-panel="threads" hidden>
-        <h2>会话</h2>
-        <p>1 个运行中会话；真实数据将在 App Server 适配器接入后显示。</p>
-      </section>
-    </main>
-    <dialog id="approval-dialog">
-      <h2>审批交互检查</h2>
-      <p>允许目标电脑执行测试命令？</p>
-      <form method="dialog"><button value="decline">拒绝</button><button value="accept">允许</button></form>
-    </dialog>
+    <div id="root"></div>
   </body>
 </html>

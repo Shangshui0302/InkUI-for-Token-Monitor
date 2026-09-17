@@ -1,9 +1,14 @@
 /target/
 **/target/
+/crates/*/Cargo.lock
 /result
 /result-*/
+/apps/ui/dist/
+/apps/ui/node_modules/
 .direnv/
 apps/shell/src-tauri/target/
+/plugins/*/android/.tauri/
+/plugins/*/android/build/
 p0-appserver-events.jsonl
 p0-approval.txt
 

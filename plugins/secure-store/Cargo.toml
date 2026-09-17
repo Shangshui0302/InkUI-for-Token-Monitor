@@ -1,0 +1,14 @@
+[package]
+name = "tauri-plugin-nekodex-secure-store"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+links = "tauri-plugin-nekodex-secure-store"
+
+[dependencies]
+tauri = { version = "2", default-features = false }
+serde = { version = "1", features = ["derive"] }
+nekodex-device-core = { path = "../../crates/device-core" }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

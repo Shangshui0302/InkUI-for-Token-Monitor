@@ -2,9 +2,10 @@
 //!
 //! [`RuntimeClient::request`] serializes request construction, stdin writes,
 //! and response routing through one actor. Callers should continuously drain
-//! [`AppServerRuntime::recv_event`]: its bounded channel intentionally applies
-//! backpressure to stdout when unsolicited events arrive faster than they are
-//! consumed.
+//! [`AppServerRuntime::recv_event`]. The event channel is bounded; redundant
+//! high-frequency delta notifications may be dropped under pressure, while an
+//! overflow of state-bearing events stops the runtime instead of blocking the
+//! actor and starving shutdown or request commands behind a slow consumer.
 
 use std::collections::HashMap;
 use std::ffi::OsString;
@@ -23,12 +24,14 @@ use tokio::time::{self, Instant};
 pub const DEFAULT_MAX_FRAME_BYTES: usize = 512 * 1024;
 pub const DEFAULT_CHANNEL_CAPACITY: usize = 64;
 pub const DEFAULT_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+pub const DEFAULT_WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Clone, Debug)]
 pub struct RuntimeConfig {
     pub program: OsString,
     pub args: Vec<OsString>,
     pub request_timeout: Duration,
+    pub write_timeout: Duration,
     pub command_capacity: usize,
     pub frame_capacity: usize,
     pub event_capacity: usize,
@@ -51,6 +54,7 @@ impl RuntimeConfig {
             program: program.into(),
             args: args.into_iter().map(Into::into).collect(),
             request_timeout: DEFAULT_REQUEST_TIMEOUT,
+            write_timeout: DEFAULT_WRITE_TIMEOUT,
             command_capacity: DEFAULT_CHANNEL_CAPACITY,
             frame_capacity: DEFAULT_CHANNEL_CAPACITY,
             event_capacity: DEFAULT_CHANNEL_CAPACITY,
@@ -69,6 +73,11 @@ impl RuntimeConfig {
                 "max_frame_bytes must be greater than zero".into(),
             ));
         }
+        if self.write_timeout.is_zero() {
+            return Err(RuntimeError::InvalidConfig(
+                "write timeout must be greater than zero".into(),
+            ));
+        }
         Ok(())
     }
 }
@@ -82,6 +91,9 @@ pub enum RuntimeError {
     },
     MissingPipe(&'static str),
     Stdin(String),
+    StdinTimeout {
+        timeout: Duration,
+    },
     Stdout(String),
     InvalidUtf8(String),
     FrameTooLarge {
@@ -119,6 +131,9 @@ impl fmt::Display for RuntimeError {
             }
             Self::MissingPipe(pipe) => write!(f, "spawned process has no piped {pipe}"),
             Self::Stdin(message) => write!(f, "failed to write app-server stdin: {message}"),
+            Self::StdinTimeout { timeout } => {
+                write!(f, "timed out writing app-server stdin after {timeout:?}")
+            }
             Self::Stdout(message) => write!(f, "failed to read app-server stdout: {message}"),
             Self::InvalidUtf8(message) => write!(f, "app-server frame is not UTF-8: {message}"),
             Self::FrameTooLarge { limit } => {
@@ -170,8 +185,7 @@ enum ActorCommand {
         timeout: Duration,
         reply: oneshot::Sender<Result<Value, RuntimeError>>,
     },
-    Send {
-        outbound: Outbound,
+    Initialized {
         reply: oneshot::Sender<Result<(), RuntimeError>>,
     },
     Shutdown {
@@ -226,10 +240,10 @@ impl RuntimeClient {
         response.await.map_err(|_| RuntimeError::QueueClosed)?
     }
 
-    pub async fn send(&self, outbound: Outbound) -> Result<(), RuntimeError> {
+    pub async fn initialized(&self) -> Result<(), RuntimeError> {
         let (reply, response) = oneshot::channel();
         self.commands
-            .send(ActorCommand::Send { outbound, reply })
+            .send(ActorCommand::Initialized { reply })
             .await
             .map_err(|_| RuntimeError::QueueClosed)?;
         response.await.map_err(|_| RuntimeError::QueueClosed)?
@@ -239,7 +253,7 @@ impl RuntimeClient {
 pub struct AppServerRuntime {
     client: RuntimeClient,
     events: mpsc::Receiver<RuntimeEvent>,
-    task: JoinHandle<Result<ExitStatus, RuntimeError>>,
+    task: Option<JoinHandle<Result<ExitStatus, RuntimeError>>>,
 }
 
 impl AppServerRuntime {
@@ -291,6 +305,7 @@ impl AppServerRuntime {
             frame_rx,
             event_tx,
             config.max_frame_bytes,
+            config.write_timeout,
         ));
 
         Ok(Self {
@@ -299,7 +314,7 @@ impl AppServerRuntime {
                 default_timeout,
             },
             events: event_rx,
-            task,
+            task: Some(task),
         })
     }
 
@@ -311,7 +326,7 @@ impl AppServerRuntime {
         self.events.recv().await
     }
 
-    pub async fn shutdown(self) -> Result<ExitStatus, RuntimeError> {
+    pub async fn shutdown(mut self) -> Result<ExitStatus, RuntimeError> {
         let (reply, response) = oneshot::channel();
         self.client
             .commands
@@ -319,15 +334,29 @@ impl AppServerRuntime {
             .await
             .map_err(|_| RuntimeError::QueueClosed)?;
         response.await.map_err(|_| RuntimeError::QueueClosed)??;
+        // Keep ownership until the await finishes so cancellation still runs
+        // Drop with the actor handle present and aborts the child-owning task.
         self.task
+            .as_mut()
+            .expect("app-server runtime task missing")
             .await
             .map_err(|error| RuntimeError::TaskJoin(error.to_string()))?
     }
 
-    pub async fn wait(self) -> Result<ExitStatus, RuntimeError> {
+    pub async fn wait(mut self) -> Result<ExitStatus, RuntimeError> {
         self.task
+            .as_mut()
+            .expect("app-server runtime task missing")
             .await
             .map_err(|error| RuntimeError::TaskJoin(error.to_string()))?
+    }
+}
+
+impl Drop for AppServerRuntime {
+    fn drop(&mut self) {
+        if let Some(task) = self.task.take() {
+            task.abort();
+        }
     }
 }
 
@@ -336,13 +365,13 @@ async fn write_outbound(
     outbound: &Outbound,
     max_frame_bytes: usize,
 ) -> Result<(), RuntimeError> {
-    if outbound.line.len() > max_frame_bytes {
+    if outbound.line().len() > max_frame_bytes {
         return Err(RuntimeError::FrameTooLarge {
             limit: max_frame_bytes,
         });
     }
     stdin
-        .write_all(outbound.line.as_bytes())
+        .write_all(outbound.line().as_bytes())
         .await
         .map_err(|error| RuntimeError::Stdin(error.to_string()))?;
     stdin
@@ -429,6 +458,7 @@ async fn run_actor(
     mut frames: mpsc::Receiver<ReaderMessage>,
     events: mpsc::Sender<RuntimeEvent>,
     max_frame_bytes: usize,
+    write_timeout: Duration,
 ) -> Result<ExitStatus, RuntimeError> {
     let mut adapter = Adapter::new();
     let mut pending: HashMap<RequestId, Pending> = HashMap::new();
@@ -448,12 +478,13 @@ async fn run_actor(
                     Err(error) => {
                         let error = RuntimeError::RuntimeStopped(error.to_string());
                         fail_all(&mut pending, error.clone());
+                        let _ = events.try_send(RuntimeEvent::Terminated(error.clone()));
                         return Err(error);
                     }
                 };
                 let error = RuntimeError::ProcessExited { code: status.code() };
                 fail_all(&mut pending, error.clone());
-                let _ = events.send(RuntimeEvent::Terminated(error)).await;
+                let _ = events.try_send(RuntimeEvent::Terminated(error));
                 return Ok(status);
             }
             message = frames.recv(), if stdout_open => {
@@ -464,12 +495,11 @@ async fn run_actor(
                                 if let Some(request) = pending.remove(&id) {
                                     let _ = request.reply.send(Ok(result));
                                 } else {
-                                    if events.send(RuntimeEvent::Incoming(Incoming::UnknownResponse {
+                                    if let Err(error) = forward_event(&events, RuntimeEvent::Incoming(Incoming::UnknownResponse {
                                         id,
                                         result: Some(result),
                                         error: None,
-                                    })).await.is_err() {
-                                        let error = RuntimeError::RuntimeStopped("event receiver closed".into());
+                                    })) {
                                         return terminate_with_error(&mut child, &mut pending, &events, error).await;
                                     }
                                 }
@@ -483,19 +513,17 @@ async fn run_actor(
                                         data: error.data,
                                     }));
                                 } else {
-                                    if events.send(RuntimeEvent::Incoming(Incoming::UnknownResponse {
+                                    if let Err(error) = forward_event(&events, RuntimeEvent::Incoming(Incoming::UnknownResponse {
                                         id,
                                         result: None,
                                         error: Some(error),
-                                    })).await.is_err() {
-                                        let error = RuntimeError::RuntimeStopped("event receiver closed".into());
+                                    })) {
                                         return terminate_with_error(&mut child, &mut pending, &events, error).await;
                                     }
                                 }
                             }
                             Ok(incoming) => {
-                                if events.send(RuntimeEvent::Incoming(incoming)).await.is_err() {
-                                    let error = RuntimeError::RuntimeStopped("event receiver closed".into());
+                                if let Err(error) = forward_event(&events, RuntimeEvent::Incoming(incoming)) {
                                     return terminate_with_error(&mut child, &mut pending, &events, error).await;
                                 }
                             }
@@ -520,9 +548,9 @@ async fn run_actor(
                                 continue;
                             }
                         };
-                        let Some(id) = outbound.id.clone() else {
+                        let Some(id) = outbound.request_id().cloned() else {
                             let _ = reply.send(Err(RuntimeError::RequestHasNoId {
-                                method: outbound.method,
+                                method: outbound.method().to_owned(),
                             }));
                             continue;
                         };
@@ -530,19 +558,36 @@ async fn run_actor(
                             let _ = reply.send(Err(RuntimeError::DuplicateRequestId(id)));
                             continue;
                         }
-                        if let Err(error) = write_outbound(&mut stdin, &outbound, max_frame_bytes).await {
+                        if let Err(error) = write_outbound_with_timeout(
+                            &mut stdin,
+                            &outbound,
+                            max_frame_bytes,
+                            write_timeout,
+                        ).await {
                             let _ = reply.send(Err(error.clone()));
                             return terminate_with_error(&mut child, &mut pending, &events, error).await;
                         }
                         pending.insert(id, Pending {
-                            method: outbound.method,
+                            method: outbound.method().to_owned(),
                             timeout,
                             deadline: Instant::now() + timeout,
                             reply,
                         });
                     }
-                    Some(ActorCommand::Send { outbound, reply }) => {
-                        let result = write_outbound(&mut stdin, &outbound, max_frame_bytes).await;
+                    Some(ActorCommand::Initialized { reply }) => {
+                        let outbound = match adapter.initialized() {
+                            Ok(outbound) => outbound,
+                            Err(error) => {
+                                let _ = reply.send(Err(error.into()));
+                                continue;
+                            }
+                        };
+                        let result = write_outbound_with_timeout(
+                            &mut stdin,
+                            &outbound,
+                            max_frame_bytes,
+                            write_timeout,
+                        ).await;
                         let failed = result.as_ref().err().cloned();
                         let _ = reply.send(result);
                         if let Some(error) = failed {
@@ -579,10 +624,45 @@ async fn run_actor(
     }
 }
 
+async fn write_outbound_with_timeout(
+    stdin: &mut ChildStdin,
+    outbound: &Outbound,
+    max_frame_bytes: usize,
+    timeout: Duration,
+) -> Result<(), RuntimeError> {
+    time::timeout(timeout, write_outbound(stdin, outbound, max_frame_bytes))
+        .await
+        .map_err(|_| RuntimeError::StdinTimeout { timeout })?
+}
+
 fn fail_all(pending: &mut HashMap<RequestId, Pending>, error: RuntimeError) {
     for (_, request) in pending.drain() {
         let _ = request.reply.send(Err(error.clone()));
     }
+}
+
+fn forward_event(
+    events: &mpsc::Sender<RuntimeEvent>,
+    event: RuntimeEvent,
+) -> Result<(), RuntimeError> {
+    match events.try_send(event) {
+        Ok(()) => Ok(()),
+        Err(mpsc::error::TrySendError::Full(event)) if is_redundant_notification(&event) => Ok(()),
+        Err(mpsc::error::TrySendError::Full(_)) => Err(RuntimeError::RuntimeStopped(
+            "app-server event queue is full".into(),
+        )),
+        Err(mpsc::error::TrySendError::Closed(_)) => {
+            Err(RuntimeError::RuntimeStopped("event receiver closed".into()))
+        }
+    }
+}
+
+fn is_redundant_notification(event: &RuntimeEvent) -> bool {
+    matches!(
+        event,
+        RuntimeEvent::Incoming(Incoming::Notification { method, .. })
+            if method.contains("/delta") || method.ends_with("/updated")
+    )
 }
 
 async fn terminate_with_error(
@@ -626,6 +706,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn cancelling_wait_or_shutdown_aborts_the_owned_actor() {
+        for shutdown in [false, true] {
+            let (commands, mut command_rx) = mpsc::channel(1);
+            let (_events, event_rx) = mpsc::channel(1);
+            let (released_tx, released_rx) = oneshot::channel::<()>();
+            let task = tokio::spawn(async move {
+                let _release_on_drop = released_tx;
+                if shutdown {
+                    let Some(ActorCommand::Shutdown { reply }) = command_rx.recv().await else {
+                        panic!("expected shutdown command");
+                    };
+                    let _ = reply.send(Ok(()));
+                }
+                std::future::pending::<Result<ExitStatus, RuntimeError>>().await
+            });
+            let runtime = AppServerRuntime {
+                client: RuntimeClient {
+                    commands,
+                    default_timeout: DEFAULT_REQUEST_TIMEOUT,
+                },
+                events: event_rx,
+                task: Some(task),
+            };
+            let result = time::timeout(Duration::from_millis(25), async move {
+                if shutdown {
+                    runtime.shutdown().await
+                } else {
+                    runtime.wait().await
+                }
+            })
+            .await;
+            assert!(result.is_err());
+            assert!(
+                time::timeout(Duration::from_secs(1), released_rx)
+                    .await
+                    .expect("actor survived cancellation")
+                    .is_err()
+            );
+        }
+    }
+
+    #[tokio::test]
     async fn correlates_request_and_response_through_child_process() {
         let runtime = AppServerRuntime::spawn(shell(
             r#"IFS= read -r line; id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9][0-9]*\).*/\1/p'); printf '{"id":%s,"result":{"ready":true}}\n' "$id"; sleep 60"#,
@@ -659,15 +781,7 @@ mod tests {
         let mut config = shell("sleep 60");
         config.max_frame_bytes = 8;
         let runtime = AppServerRuntime::spawn(config).await.unwrap();
-        let error = runtime
-            .client()
-            .send(Outbound {
-                id: None,
-                method: "test".into(),
-                line: "123456789".into(),
-            })
-            .await
-            .unwrap_err();
+        let error = runtime.client().initialized().await.unwrap_err();
         assert_eq!(error, RuntimeError::FrameTooLarge { limit: 8 });
         assert!(matches!(
             runtime.wait().await,

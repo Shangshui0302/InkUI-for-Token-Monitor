@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 use serde::{Deserialize, Serialize};
-use serde_json::{json, Value};
+use serde_json::{Value, json};
 
 /// JSON-RPC-style request identifiers accepted by Codex App Server.
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
@@ -21,9 +21,23 @@ pub enum RequestId {
 /// A JSONL frame to write to Codex App Server.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Outbound {
-    pub id: Option<RequestId>,
-    pub method: String,
-    pub line: String,
+    id: Option<RequestId>,
+    method: String,
+    line: String,
+}
+
+impl Outbound {
+    pub fn request_id(&self) -> Option<&RequestId> {
+        self.id.as_ref()
+    }
+
+    pub fn method(&self) -> &str {
+        &self.method
+    }
+
+    pub fn line(&self) -> &str {
+        &self.line
+    }
 }
 
 /// The method associated with an outstanding client request.
@@ -56,23 +70,6 @@ pub struct InitializeParams {
     pub capabilities: Option<InitializeCapabilities>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ThreadStartParams {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub cwd: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub approval_policy: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub approvals_reviewer: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sandbox: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub ephemeral: Option<bool>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub service_name: Option<String>,
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ThreadReadParams {
@@ -81,63 +78,33 @@ pub struct ThreadReadParams {
     pub include_turns: Option<bool>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ThreadResumeParams {
+pub struct ThreadTurnsListParams {
     pub thread_id: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub exclude_turns: Option<bool>,
+    pub cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sort_direction: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub items_view: Option<String>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", rename_all = "camelCase")]
-pub enum UserInput {
-    Text {
-        text: String,
-        #[serde(default)]
-        text_elements: Vec<Value>,
-    },
-    Image {
-        url: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        detail: Option<String>,
-    },
-    LocalImage {
-        path: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
-        detail: Option<String>,
-    },
-}
-
-impl UserInput {
-    pub fn text(text: impl Into<String>) -> Self {
-        Self::Text {
-            text: text.into(),
-            text_elements: Vec::new(),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+/// Minimal stable subset used by the source service. Unknown server response
+/// fields are intentionally left to the caller as JSON.
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct TurnStartParams {
-    pub thread_id: String,
-    pub input: Vec<UserInput>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TurnSteerParams {
-    pub thread_id: String,
-    pub input: Vec<UserInput>,
-    pub expected_turn_id: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct TurnInterruptParams {
-    pub thread_id: String,
-    pub turn_id: String,
+pub struct ThreadListParams {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub limit: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cwd: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub project_id: Option<String>,
 }
 
 /// Context shared by command and file-change approval prompts.
@@ -157,45 +124,14 @@ pub enum ApprovalRequest {
     Command {
         id: RequestId,
         context: ApprovalContext,
-        kind: String,
-        approval_id: Option<String>,
         command: Option<String>,
         cwd: Option<String>,
-        params: Value,
     },
     FileChange {
         id: RequestId,
         context: ApprovalContext,
         grant_root: Option<String>,
-        params: Value,
     },
-}
-
-impl ApprovalRequest {
-    pub fn id(&self) -> &RequestId {
-        match self {
-            Self::Command { id, .. } | Self::FileChange { id, .. } => id,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ApprovalDecision {
-    Accept,
-    AcceptForSession,
-    Decline,
-    Cancel,
-}
-
-impl ApprovalDecision {
-    fn wire_value(self) -> &'static str {
-        match self {
-            Self::Accept => "accept",
-            Self::AcceptForSession => "acceptForSession",
-            Self::Decline => "decline",
-            Self::Cancel => "cancel",
-        }
-    }
 }
 
 /// An app-server response error body. Unknown fields stay available in `data`.
@@ -280,7 +216,8 @@ impl Adapter {
         }
     }
 
-    pub fn pending_count(&self) -> usize {
+    #[cfg(test)]
+    fn pending_count(&self) -> usize {
         self.pending.len()
     }
 
@@ -292,59 +229,27 @@ impl Adapter {
         self.notification("initialized", json!({}))
     }
 
-    pub fn thread_start(&mut self, params: ThreadStartParams) -> Result<Outbound, AdapterError> {
-        self.request("thread/start", params)
-    }
-
     pub fn thread_read(&mut self, params: ThreadReadParams) -> Result<Outbound, AdapterError> {
         self.request("thread/read", params)
     }
 
-    pub fn thread_resume(&mut self, params: ThreadResumeParams) -> Result<Outbound, AdapterError> {
-        self.request("thread/resume", params)
-    }
-
-    pub fn turn_start(&mut self, params: TurnStartParams) -> Result<Outbound, AdapterError> {
-        self.request("turn/start", params)
-    }
-
-    pub fn turn_steer(&mut self, params: TurnSteerParams) -> Result<Outbound, AdapterError> {
-        self.request("turn/steer", params)
-    }
-
-    pub fn turn_interrupt(
+    pub fn thread_turns_list(
         &mut self,
-        params: TurnInterruptParams,
+        params: ThreadTurnsListParams,
     ) -> Result<Outbound, AdapterError> {
-        self.request("turn/interrupt", params)
+        self.request("thread/turns/list", params)
     }
 
-    pub fn approval_response(
-        &self,
-        request: &ApprovalRequest,
-        decision: ApprovalDecision,
-    ) -> Result<Outbound, AdapterError> {
-        self.response(
-            request.id().clone(),
-            json!({ "decision": decision.wire_value() }),
-        )
+    pub fn thread_list(&mut self, params: ThreadListParams) -> Result<Outbound, AdapterError> {
+        self.request("thread/list", params)
     }
 
-    pub fn server_request_error(
-        &self,
-        id: RequestId,
-        code: i64,
-        message: impl Into<String>,
-    ) -> Result<Outbound, AdapterError> {
-        let value = json!({
-            "id": &id,
-            "error": { "code": code, "message": message.into() }
-        });
-        Ok(Outbound {
-            id: Some(id),
-            method: String::new(),
-            line: encode_line(&value)?,
-        })
+    pub fn account_rate_limits_read(&mut self) -> Result<Outbound, AdapterError> {
+        self.request("account/rateLimits/read", json!({}))
+    }
+
+    pub fn account_usage_read(&mut self) -> Result<Outbound, AdapterError> {
+        self.request("account/usage/read", json!({}))
     }
 
     pub fn receive_line(&mut self, line: &str) -> Result<Incoming, AdapterError> {
@@ -409,15 +314,6 @@ impl Adapter {
         })
     }
 
-    fn response(&self, id: RequestId, result: Value) -> Result<Outbound, AdapterError> {
-        let value = json!({ "id": &id, "result": result });
-        Ok(Outbound {
-            id: Some(id),
-            method: String::new(),
-            line: encode_line(&value)?,
-        })
-    }
-
     fn route_response(
         &mut self,
         id: RequestId,
@@ -463,10 +359,6 @@ impl Adapter {
                 struct CommandParams {
                     #[serde(flatten)]
                     context: ApprovalContext,
-                    #[serde(default = "default_command_kind")]
-                    kind: String,
-                    #[serde(default)]
-                    approval_id: Option<String>,
                     #[serde(default)]
                     command: Option<String>,
                     #[serde(default)]
@@ -476,11 +368,8 @@ impl Adapter {
                 Ok(Incoming::Approval(ApprovalRequest::Command {
                     id,
                     context: parsed.context,
-                    kind: parsed.kind,
-                    approval_id: parsed.approval_id,
                     command: parsed.command,
                     cwd: parsed.cwd,
-                    params,
                 }))
             }
             "item/fileChange/requestApproval" => {
@@ -497,7 +386,6 @@ impl Adapter {
                     id,
                     context: parsed.context,
                     grant_root: parsed.grant_root,
-                    params,
                 }))
             }
             _ => Ok(Incoming::UnknownServerRequest {
@@ -507,10 +395,6 @@ impl Adapter {
             }),
         }
     }
-}
-
-fn default_command_kind() -> String {
-    "command".to_owned()
 }
 
 fn encode_line(value: &Value) -> Result<String, AdapterError> {
@@ -528,8 +412,8 @@ mod tests {
         let request = adapter
             .initialize(InitializeParams {
                 client_info: ClientInfo {
-                    name: "nekodex_p0".into(),
-                    title: Some("Nekodex P0".into()),
+                    name: "nekodex_adapter_test".into(),
+                    title: Some("Nekodex Adapter Test".into()),
                     version: "0.1.0".into(),
                 },
                 capabilities: Some(InitializeCapabilities {
@@ -563,62 +447,40 @@ mod tests {
     }
 
     #[test]
-    fn builds_lifecycle_requests_with_current_wire_names() {
+    fn builds_monitoring_requests_with_current_wire_names() {
         let mut adapter = Adapter::new();
-        let start = adapter
-            .thread_start(ThreadStartParams {
-                cwd: Some("/workspace".into()),
-                approval_policy: Some("untrusted".into()),
-                approvals_reviewer: Some("user".into()),
-                sandbox: Some("workspace-write".into()),
-                ephemeral: Some(true),
-                service_name: Some("nekodex_p0".into()),
-            })
-            .unwrap();
         let read = adapter
             .thread_read(ThreadReadParams {
                 thread_id: "thread-1".into(),
                 include_turns: Some(false),
             })
             .unwrap();
-        let resume = adapter
-            .thread_resume(ThreadResumeParams {
-                thread_id: "thread-1".into(),
-                exclude_turns: Some(true),
+        let list = adapter
+            .thread_list(ThreadListParams {
+                cwd: Some(vec!["/workspace".into()]),
+                limit: Some(50),
+                ..ThreadListParams::default()
             })
             .unwrap();
-        let turn = adapter
-            .turn_start(TurnStartParams {
+        let turns = adapter
+            .thread_turns_list(ThreadTurnsListParams {
                 thread_id: "thread-1".into(),
-                input: vec![UserInput::text("hello")],
-            })
-            .unwrap();
-        let steer = adapter
-            .turn_steer(TurnSteerParams {
-                thread_id: "thread-1".into(),
-                input: vec![UserInput::text("more")],
-                expected_turn_id: "turn-1".into(),
-            })
-            .unwrap();
-        let interrupt = adapter
-            .turn_interrupt(TurnInterruptParams {
-                thread_id: "thread-1".into(),
-                turn_id: "turn-1".into(),
+                limit: Some(20),
+                sort_direction: Some("desc".into()),
+                items_view: Some("summary".into()),
+                ..ThreadTurnsListParams::default()
             })
             .unwrap();
 
-        let frames: Vec<Value> = [start, read, resume, turn, steer, interrupt]
+        let frames: Vec<Value> = [read, list, turns]
             .into_iter()
             .map(|outbound| serde_json::from_str(&outbound.line).unwrap())
             .collect();
-        assert_eq!(frames[0]["method"], "thread/start");
-        assert_eq!(frames[0]["params"]["approvalsReviewer"], "user");
-        assert_eq!(frames[1]["method"], "thread/read");
-        assert_eq!(frames[2]["method"], "thread/resume");
-        assert_eq!(frames[3]["method"], "turn/start");
-        assert_eq!(frames[3]["params"]["input"][0]["text_elements"], json!([]));
-        assert_eq!(frames[4]["params"]["expectedTurnId"], "turn-1");
-        assert_eq!(frames[5]["method"], "turn/interrupt");
+        assert_eq!(frames[0]["method"], "thread/read");
+        assert_eq!(frames[1]["method"], "thread/list");
+        assert_eq!(frames[1]["params"]["cwd"], json!(["/workspace"]));
+        assert_eq!(frames[2]["method"], "thread/turns/list");
+        assert_eq!(frames[2]["params"]["itemsView"], "summary");
     }
 
     #[test]
@@ -653,22 +515,12 @@ mod tests {
         assert!(matches!(
             command,
             ApprovalRequest::Command {
-                ref kind,
                 ref command,
                 ref context,
                 ..
-            } if kind == "command"
-                && command.as_deref() == Some("printf ok")
+            } if command.as_deref() == Some("printf ok")
                 && context.item_id == "item-1"
         ));
-        let response = adapter
-            .approval_response(&command, ApprovalDecision::Accept)
-            .unwrap();
-        assert_eq!(
-            serde_json::from_str::<Value>(&response.line).unwrap(),
-            json!({"id":"approval-1","result":{"decision":"accept"}})
-        );
-
         assert!(matches!(
             file,
             Incoming::Approval(ApprovalRequest::FileChange {

@@ -84,6 +84,7 @@ impl SignedMembershipEvent {
                 field(&mut bytes, event.event_id.as_bytes());
                 field(&mut bytes, event.group_id.as_bytes());
                 field(&mut bytes, event.member_id.as_bytes());
+                profile(&mut bytes, event.profile.as_ref());
             }
             MembershipEvent::Added(event) => {
                 bytes.push(1);
@@ -91,6 +92,7 @@ impl SignedMembershipEvent {
                 field(&mut bytes, event.member_id.as_bytes());
                 field(&mut bytes, event.issuer_id.as_bytes());
                 parents(&mut bytes, &event.parents);
+                profile(&mut bytes, event.profile.as_ref());
             }
             MembershipEvent::Revoked(event) => {
                 bytes.push(2);
@@ -98,6 +100,14 @@ impl SignedMembershipEvent {
                 field(&mut bytes, event.member_id.as_bytes());
                 field(&mut bytes, event.issuer_id.as_bytes());
                 parents(&mut bytes, &event.parents);
+            }
+            MembershipEvent::Renamed(event) => {
+                bytes.push(3);
+                field(&mut bytes, event.event_id.as_bytes());
+                field(&mut bytes, event.member_id.as_bytes());
+                field(&mut bytes, event.issuer_id.as_bytes());
+                parents(&mut bytes, &event.parents);
+                field(&mut bytes, event.name.as_bytes());
             }
         }
         bytes
@@ -121,6 +131,7 @@ fn validate_context(
         }
         MembershipEvent::Added(event) => &event.issuer_id,
         MembershipEvent::Revoked(event) => &event.issuer_id,
+        MembershipEvent::Renamed(event) => &event.issuer_id,
     };
     if issuer != &member_id_for_key(key) {
         return Err("issuer identity does not match signing key");
@@ -140,6 +151,21 @@ fn parents(bytes: &mut Vec<u8>, values: &std::collections::BTreeSet<String>) {
     }
 }
 
+fn profile(bytes: &mut Vec<u8>, value: Option<&crate::MemberProfile>) {
+    match value {
+        None => bytes.push(0),
+        Some(value) => {
+            bytes.push(1);
+            field(bytes, value.device_id.as_bytes());
+            field(bytes, value.name.as_bytes());
+            bytes.extend_from_slice(&value.signing_public_key);
+            bytes.extend_from_slice(&value.noise_public_key);
+            bytes.push(value.codex_capable as u8);
+            bytes.extend_from_slice(&value.protocol_version.to_be_bytes());
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -155,6 +181,7 @@ mod tests {
             member_id: member_id_for_key(&SigningKey::from_bytes(&[8; 32]).verifying_key()),
             issuer_id: member_id_for_key(&key().verifying_key()),
             parents: ["root".into(), "other".into()].into(),
+            profile: None,
         })
     }
 
@@ -165,6 +192,7 @@ mod tests {
                 event_id: "root".into(),
                 group_id: "group".into(),
                 member_id: member_id_for_key(&key().verifying_key()),
+                profile: None,
             }),
             added(),
             MembershipEvent::Revoked(MemberRevoked {
@@ -232,6 +260,7 @@ mod tests {
             event_id: "root".into(),
             group_id: "group".into(),
             member_id: member_id_for_key(&key().verifying_key()),
+            profile: None,
         });
         assert!(SignedMembershipEvent::sign("different", event.clone(), &key()).is_err());
         assert!(
@@ -264,6 +293,7 @@ mod tests {
             event_id: "root".into(),
             group_id: "group".into(),
             member_id: member_id_for_key(&key().verifying_key()),
+            profile: None,
         });
         let signed = SignedMembershipEvent::sign("group", event, &key()).unwrap();
         let mut log = MembershipLog::default();
@@ -285,6 +315,7 @@ mod tests {
                 event_id: "root".into(),
                 group_id: "group".into(),
                 member_id: founder_id.clone(),
+                profile: None,
             }),
             &founder,
         )
@@ -296,6 +327,7 @@ mod tests {
                 member_id: member_id_for_key(&SigningKey::from_bytes(&[8; 32]).verifying_key()),
                 issuer_id: founder_id,
                 parents: ["root".into()].into(),
+                profile: None,
             }),
             &founder,
         )
@@ -329,6 +361,7 @@ mod tests {
                     event_id: "root".into(),
                     group_id: "group".into(),
                     member_id: founder_id.clone(),
+                    profile: None,
                 }),
                 &founder,
             )
@@ -340,6 +373,7 @@ mod tests {
                     member_id: member_b_id.clone(),
                     issuer_id: founder_id,
                     parents: ["root".into()].into(),
+                    profile: None,
                 }),
                 &founder,
             )
@@ -351,6 +385,7 @@ mod tests {
                     member_id: member_c_id.clone(),
                     issuer_id: member_b_id.clone(),
                     parents: ["add-b".into()].into(),
+                    profile: None,
                 }),
                 &member_b,
             )

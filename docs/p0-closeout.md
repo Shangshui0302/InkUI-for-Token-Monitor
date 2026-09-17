@@ -2,7 +2,9 @@
 
 日期：2026-09-15
 
-结论：通过，允许进入 P1 局域网设备组；以下限制已明确记录，不视为完整产品能力。
+> 历史记录：本文保存 2026-09-15 的可行性实验结论，不是当前开发或验收说明。当前产品已收窄为只读监控，以 `REWRITE-PLAN.md` 和 `docs/implementation-status.md` 为准。
+
+当时结论：通过，允许进入 P1 局域网设备组；以下限制已明确记录，不视为完整产品能力。
 
 ## 门禁结果
 
@@ -13,24 +15,13 @@
 | 外部会话限制 | 通过（限制记录） | 跨 App Server 进程可读取和恢复空闲持久会话；桌面客户端持有的运行中轮次与审批不宣称可接管 |
 | 成员撤销与并发模型 | 通过（领域层） | Ed25519 签名成员 DAG、撤销优先、乱序/冲突、三份独立日志、请求幂等、进程世代、旧审批失效和本地防回滚检查点均有确定性测试 |
 
-## 可重复检查
+## 历史检查记录
 
-```bash
-node --check apps/ui/app.js
-node --check tools/appserver-file-approval-probe.mjs
-nix develop -c cargo fmt --all -- --check
-nix develop -c cargo test --workspace
-nix develop -c cargo clippy --workspace --all-targets -- -D warnings
-nix develop -c cargo tauri build --no-bundle --config apps/shell/src-tauri/tauri.conf.json
-nix develop .#android -c cargo tauri android build --debug --target aarch64
-git diff --check
-```
-
-真实 App Server 检查会消耗少量账户用量，因此默认测试将应用壳真实测试标为 ignored，需显式运行。文件审批探针同样只在需要重新验证锁定版本时执行。
+当时使用静态 UI、Nix 开发环境和会话写入/审批探针完成检查。当前工作树已经换成 React 统一前端、Poke3 专用环境和只读来源服务，因此不再把旧命令列为可执行入口。需要复核当时的探针或原始命令时查看 Git 历史提交 `e09a1a7`；不要在当前只读监控开发中直接恢复它们。
 
 ## 已知边界
 
-- 当前 UI 是共享静态 P0 探针，不是 React/TypeScript 完整工作台；额度、活动、节点和会话内容仍是固定演示数据。
+- 当时 UI 是共享静态 P0 探针，不是 React/TypeScript 完整工作台；额度、活动、节点和会话内容仍是固定演示数据。当前实现已被统一 React 前端取代。
 - Poke3 不在本机运行 Codex。正式远程操作依赖 P1/P3 的局域网连接和业务服务。
 - 签名、邀请、防回滚与三节点结论目前是领域层证明；密钥安全存储、成员日志持久化、网络握手和连接门禁属于 P1。
 - 文件审批成功是当前 `codex-cli 0.154.0` 的一次真实样本；升级后必须重新生成协议并复测。
@@ -39,4 +30,4 @@ git diff --check
 
 ## 下一阶段
 
-P1 首先实现设备身份持久化、创建/加入组、真实 PAKE 握手、签名名册交换、mDNS 与手工地址、加密 WebSocket、重连和撤销连接门禁；再用 NixOS、第二台电脑和 Poke3 完成真实三节点验收。
+当时计划由 P1 实现设备身份持久化、创建/加入组、真实 PAKE 握手、签名名册交换、mDNS 与手工地址、加密 WebSocket、重连和撤销连接门禁。当前实现状态与尚待完成的真实三节点验收统一记录在 `docs/implementation-status.md`。

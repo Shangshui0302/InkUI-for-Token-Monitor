@@ -1,0 +1,13 @@
+[package]
+name = "tauri-plugin-nekodex-platform-lifecycle"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+links = "tauri-plugin-nekodex-platform-lifecycle"
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", default-features = false }
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

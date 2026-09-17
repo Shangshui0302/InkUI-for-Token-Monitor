@@ -22,7 +22,7 @@
 | 导航 | 已验证：真机点击“活动”后仅活动面板显示，当前项状态同步变化 | 真机交互与临时验收截图；处理器位于 `apps/ui/app.js` |
 | 软键盘与文本 | 部分验证：点击输入框后 `mInputShown=true`，ADB ASCII 文本 `Poke3-test` 可见 | `dumpsys input_method` 与真机临时截图；尚未验证中文 IME 输入 |
 | 审批弹层 | 已验证演示交互：真机打开弹层后“拒绝/允许”按钮可见 | 真机临时截图；这仍是 UI 探针，未连接真实 App Server 审批回调 |
-| WebSocket | 已验证：真机页面连接 `ws://127.0.0.1:18789`，经 `adb reverse` 到本机最小 echo 服务后显示“WebSocket 正常” | `tools/p0-websocket-echo.mjs` 与真机临时截图；只证明 Poke3 WebView 的基础 WebSocket 兼容性，不证明设备组网络链路 |
+| WebSocket | 已验证：真机页面曾连接 `ws://127.0.0.1:18789`，经 `adb reverse` 到本机最小 echo 服务后显示“WebSocket 正常” | 历史探针与真机截图只证明 Poke3 WebView 的基础 WebSocket 兼容性，不证明设备组网络链路；探针已从当前只读工作树移除，可从 Git 历史提交 `e09a1a7` 查看 |
 | 桌面专用能力隔离 | 已验证：Poke3 点击“运行桌面 App Server 验证”后通过 IPC 返回“Poke3 是控制端，不在本机运行 Codex App Server” | 最新 APK 真机键盘焦点/点击与临时截图；证明桌面依赖未被误用于 Android，不证明远程调用已实现 |
 | 冷启动 Activity 耗时 | 已记录一次：`am start -W` 的 `TotalTime=1658ms` | 此值不是首屏内容绘制时间；约 5 秒时的中间截图仍为空白，因此不能声称首屏 2 秒目标通过 |
 | 内存快照 | 已记录两次 PSS：约 76,344 KiB 与 99,294 KiB | `adb -s 82CCF4BF shell dumpsys meminfo dev.nekodex.workbench.p0`；均低于 200MB 目标，但单点值不能证明长期稳定性 |

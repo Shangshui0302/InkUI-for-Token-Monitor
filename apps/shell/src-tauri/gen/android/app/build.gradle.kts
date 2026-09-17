@@ -15,10 +15,12 @@ val tauriProperties = Properties().apply {
 
 android {
     compileSdk = 36
-    namespace = "dev.nekodex.workbench.p0"
+    namespace = "dev.nekodex.workbench"
     defaultConfig {
-        manifestPlaceholders["usesCleartextTraffic"] = "false"
-        applicationId = "dev.nekodex.workbench.p0"
+        // LAN peers use ws:// as the carrier; the application payload is
+        // independently authenticated and encrypted by the Noise session.
+        manifestPlaceholders["usesCleartextTraffic"] = "true"
+        applicationId = "dev.nekodex.workbench"
         minSdk = 29
         targetSdk = 36
         versionCode = tauriProperties.getProperty("tauri.android.versionCode", "1").toInt()
@@ -26,7 +28,6 @@ android {
     }
     buildTypes {
         getByName("debug") {
-            manifestPlaceholders["usesCleartextTraffic"] = "true"
             isDebuggable = true
             isJniDebuggable = true
             isMinifyEnabled = false

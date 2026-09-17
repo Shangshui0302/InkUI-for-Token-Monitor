@@ -1,0 +1,21 @@
+{
+  "name": "nekodex-monitor-ui",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Nekodex cross-device monitoring frontend",
+  "scripts": {
+    "build": "node ../../tools/build-frontend.mjs"
+  },
+  "dependencies": {
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "scheduler": "0.28.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
+    "esbuild": "0.27.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
