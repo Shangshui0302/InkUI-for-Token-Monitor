@@ -58,6 +58,8 @@ cargo tauri android build --apk --target aarch64
 
 Nix 包升级替换程序闭包，不删除 Tauri 应用数据目录。升级前后需核对相同的 `device-v1.sqlite3` 与平台密钥存储仍可读取；回滚到不理解当前 schema 的旧版本不受支持。
 
+数据库的多步 schema migration 在单个 SQLite transaction 中执行，并在提交前最后更新 `user_version`；迁移失败不会把半完成 schema 标记为新版本。这不等于支持向旧版本降级。
+
 ## 尚待验收
 
 - 正式签名旧 APK 到新 APK 的覆盖升级。

@@ -63,6 +63,8 @@ cargo tauri android build --debug --target aarch64
 
 当前只读监控版 Android Debug 包已在 Poke3 真机构建安装并验证统一安装内页面、本地 IPC、创建设备组、本机重命名及普通退到桌面后的前台连接服务保活。Poke3 已与 Linux 来源电脑完成认证配对，并通过固定 TCP 8788 读取到真实账户额度快照；Android 端不运行 Codex，只读查看额度、用量、项目、会话和待审批状态。系统回收恢复、长时间性能及更多页面的数据一致性仍待验收。最新证据见 `docs/implementation-status.md`，历史 P0 证据见 `docs/p0-android-report.md`。
 
+首次入组、网络要求、来源模式、后台行为与故障恢复见 [docs/operations.md](docs/operations.md)。
+
 首批发布产物、Android 外部签名配置、版本递增规则、覆盖升级的数据保留边界与尚待验收项目见 [docs/release-and-upgrade.md](docs/release-and-upgrade.md)。正式发布、上传制品或创建签名密钥仍需单独授权。
 
 `node tools/release-metadata.mjs` 可在不触发构建的情况下检查 Tauri、Cargo 与 Nix 版本一致性；传入制品路径时还会输出大小和 SHA-256 清单。
