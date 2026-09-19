@@ -25,6 +25,7 @@ MAX_ACTIVITY = 100
 MAX_SESSIONS = 500
 MAX_TEXT = 240
 MAX_SCAN_ROLLOUTS = 32
+ACCESS_TOKEN = os.environ.get("CODEX_STATUS_TOKEN")
 
 
 def codex_home() -> Path:
@@ -309,13 +310,16 @@ section{background:#fff;border:1px solid #999;border-radius:12px;padding:16px}
 li{margin:8px 0}.bar{height:12px;border:1px solid #777;border-radius:8px;overflow:hidden}.fill{height:100%;background:#b66b2c}
 </style>
 <h1>Codex 状态</h1><small id=meta>读取中…</small>
+<p><input id=token type=password placeholder="局域网令牌（如需要）"><button id=save>保存令牌</button></p>
 <div class=grid><section><h2>当前任务</h2><div id=task class=value>读取中…</div><div id=task-detail class=muted></div></section>
 <section><h2>额度</h2><div id=quota>读取中…</div></section>
 <section><h2>最近活动</h2><ul id=activity><li>读取中…</li></ul></section>
 <section><h2>会话</h2><div id=sessions>读取中…</div></section></div>
 <script>
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function refresh(){try{const s=await fetch('/api/status',{cache:'no-store'}).then(r=>r.json());
+const tokenInput=document.querySelector('#token'); tokenInput.value=localStorage.getItem('codex-status-token')||'';
+document.querySelector('#save').onclick=()=>{localStorage.setItem('codex-status-token',tokenInput.value);refresh();};
+async function refresh(){try{const headers=tokenInput.value?{'Authorization':'Bearer '+tokenInput.value}:{};const s=await fetch('/api/status',{cache:'no-store',headers}).then(r=>r.json());
 document.querySelector('#meta').textContent=`${esc(s.source.codex_home)} · ${esc(s.generated_at)}`;
 document.querySelector('#task').textContent=esc(s.task.title||'暂无任务')+' · '+esc(s.task.state);
 document.querySelector('#task-detail').textContent=esc(s.task.preview||s.workspace||'');
@@ -343,6 +347,13 @@ class Handler(BaseHTTPRequestHandler):
         except (BrokenPipeError, ConnectionResetError):
             pass
 
+    def authorized(self) -> bool:
+        if not ACCESS_TOKEN:
+            return True
+        authorization = self.headers.get("Authorization", "")
+        supplied = authorization[7:] if authorization.startswith("Bearer ") else self.headers.get("X-Codex-Status-Token", "")
+        return supplied == ACCESS_TOKEN
+
     def do_GET(self) -> None:  # noqa: N802
         path = urlparse(self.path).path
         if path == "/":
@@ -350,6 +361,9 @@ class Handler(BaseHTTPRequestHandler):
             return
         if path == "/healthz":
             self.send_bytes(json.dumps({"ok": True, "generated_at": iso_time(time.time())}).encode(), "application/json")
+            return
+        if path.startswith("/api/") and not self.authorized():
+            self.send_bytes(b"Unauthorized", "text/plain; charset=utf-8", 401)
             return
         if path == "/api/status":
             self.send_bytes(json.dumps(build_status(), ensure_ascii=False).encode(), "application/json; charset=utf-8")
@@ -368,6 +382,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", default=os.environ.get("CODEX_STATUS_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.environ.get("CODEX_STATUS_PORT", "8765")))
     args = parser.parse_args(argv)
+    if args.host not in {"127.0.0.1", "localhost", "::1"} and not ACCESS_TOKEN:
+        print("CODEX_STATUS_TOKEN is required when binding beyond localhost", file=sys.stderr)
+        return 2
     server = ThreadingHTTPServer((args.host, args.port), Handler)
     print(f"Codex status: http://{args.host}:{args.port}/", flush=True)
     try:

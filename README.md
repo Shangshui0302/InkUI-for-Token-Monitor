@@ -7,10 +7,11 @@
 ```bash
 CODEX_HOME="$HOME/.codex" \
 CODEX_STATUS_WORKSPACE="$PWD" \
+CODEX_STATUS_TOKEN="choose-a-private-token" \
 python3 tools/codex-status-server.py --host 0.0.0.0 --port 8765
 ```
 
-浏览器打开 `http://<来源电脑>:8765/`；脚本同时提供 `/healthz`、`/api/status` 和 `/api/sessions`。本地检查使用 `python3 -m unittest discover -s tools -p 'test_codex_status_server.py'`。局域网监听前应先确认网络范围和访问令牌方案；默认只读页面不适合直接暴露到公网。
+浏览器打开 `http://<来源电脑>:8765/` 并输入令牌；脚本同时提供 `/healthz`、`/api/status` 和 `/api/sessions`。本地监听不需要令牌；绑定局域网地址时必须设置 `CODEX_STATUS_TOKEN`。本地检查使用 `python3 -m unittest discover -s tools -p 'test_codex_status_server.py'`，默认只读页面不适合直接暴露到公网。
 
 局域网内的个人 Codex 设备组。设备一次入组后共享成员资格，额度、活动、会话和待审批状态直接由对应电脑提供；PC 与 Android 使用同一套前端。
 
