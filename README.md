@@ -2,6 +2,16 @@
 
 > **架构已重新收敛：** 后续开发以 [Nekodex 简化监控架构](docs/simplified-monitor-architecture.md) 为唯一基线，直接只读 Codex 本地 SQLite、索引与 rollout 日志，不再把 App Server、共享 daemon、事件回放和复杂能力协商作为首版主链路。下文保留的是当前旧实现状态，供迁移和删减时核对。
 
+当前简化采集器入口为 `tools/codex-status-server.py`。它只使用 Python 标准库，不启动 App Server、不访问在线额度接口，也不会写入 `CODEX_HOME`：
+
+```bash
+CODEX_HOME="$HOME/.codex" \
+CODEX_STATUS_WORKSPACE="$PWD" \
+python3 tools/codex-status-server.py --host 0.0.0.0 --port 8765
+```
+
+浏览器打开 `http://<来源电脑>:8765/`；脚本同时提供 `/healthz`、`/api/status` 和 `/api/sessions`。本地检查使用 `python3 -m unittest discover -s tools -p 'test_codex_status_server.py'`。局域网监听前应先确认网络范围和访问令牌方案；默认只读页面不适合直接暴露到公网。
+
 局域网内的个人 Codex 设备组。设备一次入组后共享成员资格，额度、活动、会话和待审批状态直接由对应电脑提供；PC 与 Android 使用同一套前端。
 
 当前产品边界为只读监控：不提供远程创建、发送消息、停止任务或处理审批。三节点入组及原来源节点暂停后的其余节点直连已有一次真实运行证据；跨设备全页面数据一致性、恢复路径和长期性能仍待集成验收：

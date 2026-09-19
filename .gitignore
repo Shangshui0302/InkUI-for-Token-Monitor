@@ -20,6 +20,7 @@ p0-approval.txt
 # Editor and OS noise
 .DS_Store
 *.swp
+__pycache__/
 
 # Local design and research references
 /reference/

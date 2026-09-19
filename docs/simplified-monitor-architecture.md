@@ -6,6 +6,8 @@
 
 优先级：取代现有 App Server 来源链路，作为后续开发的唯一基线
 
+当前实现：`tools/codex-status-server.py` 已提供单机只读采集器和浏览器页面；Tauri/Android 壳切换到该接口仍是后续迁移步骤，不把旧来源链路的运行结果当作新方案的验证。
+
 ## 决策摘要
 
 Nekodex 的首要目标是稳定展示 Codex 已经写入本机的只读状态，而不是复刻 Codex 客户端、托管 App Server 或建设通用分布式协议。
@@ -158,6 +160,18 @@ Nekodex 的首要目标是稳定展示 Codex 已经写入本机的只读状态�
 - 单项故障不得影响其他字段。
 
 完成条件：不启动 App Server、不访问 OpenAI 网络接口时，`/api/status` 能持续返回当前真实状态。
+
+当前本地验证命令：
+
+```bash
+CODEX_HOME="$HOME/.codex" CODEX_STATUS_WORKSPACE="$PWD" \
+python3 tools/codex-status-server.py --host 127.0.0.1 --port 8765
+curl http://127.0.0.1:8765/healthz
+curl http://127.0.0.1:8765/api/status
+curl http://127.0.0.1:8765/api/sessions
+```
+
+当前验证已确认：真实宿主数据可返回任务、额度窗口、最近活动和会话数量；服务不需要 App Server 或外网可用。
 
 ### M2：统一前端接入
 
