@@ -1,6 +1,6 @@
 # Codex 跨设备监控台
 
-> **架构已重新收敛：** 后续开发以 [Nekodex 简化监控架构](docs/simplified-monitor-architecture.md) 为唯一基线，直接只读 Codex 本地 SQLite、索引与 rollout 日志，不再把 App Server、共享 daemon、事件回放和复杂能力协商作为首版主链路。下文保留的是当前旧实现状态，供迁移和删减时核对。
+> **架构已重新收敛：** 当前基线是 M1 已实现的本机只读采集器；后续开发以 [Nekodex 简化监控架构](docs/simplified-monitor-architecture.md) 为唯一基线，直接只读 Codex 本地 SQLite、索引与 rollout 日志，不再把 App Server、共享 daemon、事件回放和复杂能力协商作为首版主链路。文档后半保留旧实现状态，仅供迁移和删减时核对。
 
 当前简化采集器入口为 `tools/codex-status-server.py`。它只使用 Python 标准库，不启动 App Server、不访问在线额度接口，也不会写入 `CODEX_HOME`：
 
@@ -13,13 +13,17 @@ python3 tools/codex-status-server.py --host 0.0.0.0 --port 8765
 
 浏览器打开 `http://<来源电脑>:8765/` 并输入令牌；脚本同时提供 `/healthz`、`/api/status` 和 `/api/sessions`。本地监听不需要令牌；绑定局域网地址时必须设置 `CODEX_STATUS_TOKEN`。本地检查使用 `python3 -m unittest discover -s tools -p 'test_codex_status_server.py'`，默认只读页面不适合直接暴露到公网。
 
-局域网内的个人 Codex 设备组。设备一次入组后共享成员资格，额度、活动、会话和待审批状态直接由对应电脑提供；PC 与 Android 使用同一套前端。
+截至 2026-09-20，M1 已用真实宿主数据验证：任务状态为 `ready`，读取到 1 个额度窗口、100 条活动和 1 个会话，错误条数为 0；标准库编译检查和 2 项单元测试通过。Tauri/Android 接入和 Poke3 新 HTTP 单来源交付分别属于 M2、M3，当前不应把旧 8788 设备组或 App Server 运行结果当作新方案验收。
 
-当前产品边界为只读监控：不提供远程创建、发送消息、停止任务或处理审批。三节点入组及原来源节点暂停后的其余节点直连已有一次真实运行证据；跨设备全页面数据一致性、恢复路径和长期性能仍待集成验收：
+旧实现的局域网个人 Codex 设备组。设备一次入组后共享成员资格，额度、活动、会话和待审批状态直接由对应电脑提供；PC 与 Android 使用同一套前端。该 8788/设备组链路待 M2/M3 迁移，当前 M1 不依赖它。
+
+当前产品边界为只读监控：不提供远程创建、发送消息、停止任务或处理审批。旧设备组的三节点入组及原来源节点暂停证据仍可追溯；新 M1 的跨设备全页面数据一致性、Poke3 接入、恢复路径和长期性能仍待 M2/M3 集成验收：
 
 当前最高优先级是以最短路径上线 NixOS/Linux 与 Poke3 的只读 MVP。开发只运行与本次修改直接相关的最小检查；不因全页面矩阵、长期待机、极端网络、未发布平台、重复全量测试或没有具体缺陷依据的额外安全加固延迟首发。设备身份认证、密钥保护、只读权限边界、制品签名和版本一致性属于产品可用性的必要条件，仍是发布门禁。
 
-电脑来源优先连接已经运行的官方本地共享 App Server daemon，从而读取该 daemon 已加载会话的实时状态；daemon 不可用时回退到独立只读 App Server。回退模式仍可读取额度和持久化历史，但界面不会把 `notLoaded` 或不可见的审批误报成实时状态。用户可以在本机界面明确调用官方共享 daemon 命令；应用不会在后台静默修改它。该命令当前要求 Codex 安装器管理的 standalone CLI，Nix 打包的 CLI 会保留历史回退来源并显示官方失败原因。
+旧 Tauri/设备组链路（待退役）优先连接已经运行的官方本地共享 App Server daemon，从而读取该 daemon 已加载会话的实时状态；daemon 不可用时回退到独立只读 App Server。它不属于 M1 当前数据源，后续迁移完成前只作为历史实现保留。
+
+## 旧实现目录（迁移前保留）
 
 - `apps/ui`：React + TypeScript 统一响应式界面，经 Nix 固定依赖并随应用安装，无远程网页依赖；
 - `apps/shell`：Tauri 2 桌面/Android 壳，Android 最低 API 29；

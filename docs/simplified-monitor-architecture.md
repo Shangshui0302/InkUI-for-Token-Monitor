@@ -1,12 +1,25 @@
 # Nekodex 简化监控架构
 
-状态：已接受
+状态：M1 已实现并验证；M2 待开始
 
-日期：2026-09-17
+日期：2026-09-20
 
 优先级：取代现有 App Server 来源链路，作为后续开发的唯一基线
 
 当前实现：`tools/codex-status-server.py` 已提供单机只读采集器和浏览器页面；Tauri/Android 壳切换到该接口仍是后续迁移步骤，不把旧来源链路的运行结果当作新方案的验证。
+
+## 当前实现状态
+
+M1 已在提交 `a490c26` 落地，局域网令牌边界在提交 `8f9700e` 补齐。当前可运行入口是标准库实现的 `tools/codex-status-server.py`，它只读 `CODEX_HOME`，提供 `/healthz`、`/api/status` 和 `/api/sessions`，并内置一个可直接访问的浏览器页面。它不启动 App Server、不调用 OpenAI 在线接口，也不写入本机 Codex 状态文件。
+
+2026-09-20 的最小验证结果如下：
+
+- `python3 -m py_compile tools/codex-status-server.py tools/test_codex_status_server.py` 通过；
+- `python3 -m unittest discover -s tools -p 'test_codex_status_server.py' -v` 通过，2 项测试通过；
+- 使用真实宿主 `CODEX_HOME` 访问本地服务时，健康状态为 `ok`，任务状态为 `ready`，存在当前线程，额度窗口为 1，活动条数为 100，会话条数为 1，错误条数为 0；
+- 绑定 `0.0.0.0` 时未设置令牌会以退出码 2 拒绝启动；未认证 API 返回 401，正确 Bearer 令牌返回 200。
+
+因此当前可交付物是“来源电脑上的 M1 采集器 + 独立浏览器页面”。Tauri/Android 尚未切换到这些接口，Poke3 通过新 HTTP 接口读取和统一前端渲染属于 M2；单来源局域网交付属于 M3。旧 App Server、共享 daemon 和 8788 设备组链路的运行结果不计入 M1 完成证据。
 
 ## 决策摘要
 

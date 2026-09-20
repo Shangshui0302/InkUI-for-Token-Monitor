@@ -4,7 +4,24 @@
 
 本文面向首批支持环境：NixOS/Linux 来源电脑与 Poke3 Android 10 监控端。Nekodex 当前只读，不会远程创建、发送、停止任务或处理审批。
 
-## 首次使用
+## 当前 M1 运行方式
+
+M1 的实际运行入口是来源电脑上的 `tools/codex-status-server.py`，不是本手册后文的 8788 设备组服务。它只读本机 `CODEX_HOME`，通过 HTTP 提供 `/healthz`、`/api/status` 和 `/api/sessions`；Tauri/Android 接入仍属于 M2，Poke3 单来源局域网交付属于 M3。
+
+在来源电脑执行：
+
+```bash
+CODEX_HOME="$HOME/.codex" \
+CODEX_STATUS_WORKSPACE="$PWD" \
+CODEX_STATUS_TOKEN="choose-a-private-token" \
+python3 tools/codex-status-server.py --host 0.0.0.0 --port 8765
+```
+
+浏览器访问 `http://<来源电脑>:8765/` 并输入令牌。若只在本机检查，可绑定 `127.0.0.1`，此时不需要令牌。M1 的验证和边界见 [实现状态](implementation-status.md) 与 [简化监控架构](simplified-monitor-architecture.md)。
+
+以下章节中的 `8788`、mDNS、设备组成员名册、来源重启和 App Server 均属于旧实现迁移资料；不要用它们判断 M1 是否可用。
+
+## 旧设备组首次使用（历史）
 
 1. 在一台设备上打开“设备组”，设置本机名称并创建设备组。
 2. 选择“邀请新设备”，在 10 分钟有效期内让另一台设备通过附近发现或 `IP:8788` 连接，并输入 8 位加入码。
@@ -13,7 +30,7 @@
 
 加入码只用于本次限时邀请。不要截图、记录到日志或交给设备组之外的人。设备组成员可以读取组内来源电脑公布的监控数据，并可以邀请或移除其他成员，因此只加入个人信任设备。
 
-## 网络要求
+## 旧设备组网络要求（历史）
 
 - Nekodex 固定监听 TCP 8788，用于认证后的 Noise 加密直连。
 - 附近发现使用局域网 mDNS；网络需允许组播和 UDP 5353。
@@ -22,7 +39,7 @@
 
 公开候选地址和 mDNS 信息不授予访问权限。业务连接仍须验证设备身份、设备组成员资格和协议能力。
 
-## 来源电脑
+## 旧来源电脑实现（历史）
 
 Linux 电脑可以提供额度、活动、项目、会话和待审批状态。Poke3 只查看数据，不运行 Codex。
 
