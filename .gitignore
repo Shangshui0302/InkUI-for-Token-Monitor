@@ -24,3 +24,4 @@ __pycache__/
 
 # Local design and research references
 /reference/
+/output/playwright/

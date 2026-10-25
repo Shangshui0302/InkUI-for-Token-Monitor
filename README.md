@@ -1,27 +1,53 @@
-# Codex 跨设备监控台
+# Token Monitor 墨水屏看板
 
-> **架构已重新收敛：** 当前基线是 M1 已实现的本机只读采集器；后续开发以 [Nekodex 简化监控架构](docs/simplified-monitor-architecture.md) 为唯一基线，直接只读 Codex 本地 SQLite、索引与 rollout 日志，不再把 App Server、共享 daemon、事件回放和复杂能力协商作为首版主链路。文档后半保留旧实现状态，仅供迁移和删减时核对。
+当前方向：复用 Token Monitor 采集与本机留存，提供可在 Poke3 浏览器中打开的完整只读看板。前端入口是 `apps/eink/`，启动入口是 `tools/token-monitor-eink.py`；无需 npm 安装、前端构建或 Tauri。
 
-当前简化采集器入口为 `tools/codex-status-server.py`。它只使用 Python 标准库，不启动 App Server、不访问在线额度接口，也不会写入 `CODEX_HOME`：
+看板有总览、额度、会话、活动、明细五页，支持日／月／累计切换；展示 tokens、估算 USD cost、分项与速度，以及 models、clients、projects、devices。墨水屏页面固定在可用视口内，不使用滚动；通过页面、时段、筛选和翻页按钮浏览，长值进入分段详情页查看。会话列表可切换全部／运行中，活动页提供全年灰阶热力图、趋势、每日与每月视图。页面只读，不提供会话控制；归档数据来自本机已有记录，不代表跨设备完整历史，也不表示完整复制了对话正文或工具调用详情。默认每 60 秒读取，可改为每 5 分钟或手动；页面隐藏时暂停，各类数据断线时分别保留最近成功缓存。
+
+## 启动
+
+先启动已配置账号的 Token Monitor。此电脑使用 `arch` Distrobox 中的入口：
 
 ```bash
-CODEX_HOME="$HOME/.codex" \
-CODEX_STATUS_WORKSPACE="$PWD" \
-CODEX_STATUS_TOKEN="choose-a-private-token" \
-python3 tools/codex-status-server.py --host 0.0.0.0 --port 8765
+distrobox enter arch -- /home/lishangshui/distrobox/arch/.local/bin/token-monitor-host
 ```
 
-浏览器打开 `http://<来源电脑>:8765/` 并输入令牌；脚本同时提供 `/healthz`、`/api/status` 和 `/api/sessions`。本地监听不需要令牌；绑定局域网地址时必须设置 `CODEX_STATUS_TOKEN`。本地检查使用 `python3 -m unittest discover -s tools -p 'test_codex_status_server.py'`，默认只读页面不适合直接暴露到公网。
+在当前任务 worktree `/home/lishangshui/.codex/worktrees/poke3-token-monitor/codex-monitor-UI` 的仓库根目录启动墨水屏页面服务。令牌文件放在该 worktree 的忽略目录 `.codex-monitor/view-token.secret`。服务可直接从现有 Token Monitor `credentials.json` 读取 `credentials.hub.hostSecret`，不会把凭据复制到仓库或页面：
 
-截至 2026-09-20，M1 已用真实宿主数据验证：任务状态为 `ready`，读取到 1 个额度窗口、100 条活动和 1 个会话，错误条数为 0；标准库编译检查和 2 项单元测试通过。Tauri/Android 接入和 Poke3 新 HTTP 单来源交付分别属于 M2、M3，当前不应把旧 8788 设备组或 App Server 运行结果当作新方案验收。
+```bash
+python3 tools/token-monitor-eink.py \
+  --hub-credentials-file "/home/lishangshui/distrobox/arch/.config/Token Monitor/credentials.json" \
+  --session-archive "/home/lishangshui/distrobox/arch/.config/Token Monitor/session-usage-archive.sqlite" \
+  --host 0.0.0.0 --port 18788 \
+  --view-token-file "$PWD/.codex-monitor/view-token.secret"
+```
 
-旧实现的局域网个人 Codex 设备组。设备一次入组后共享成员资格，额度、活动、会话和待审批状态直接由对应电脑提供；PC 与 Android 使用同一套前端。该 8788/设备组链路待 M2/M3 迁移，当前 M1 不依赖它。
+当前现场通过 `http://10.229.113.165:18788/` 访问；服务默认端口仍为 `8766`，命令行指定 `18788` 是本次运行配置。Poke3 与来源电脑在同一 Wi-Fi 局域网时，在浏览器打开该地址并输入查看令牌。若尚无令牌文件，可安全生成一个随机令牌；以下操作设置仅所有者可读写，并使用 shell 的禁止覆写模式，已有文件会保持原样：
 
-当前产品边界为只读监控：不提供远程创建、发送消息、停止任务或处理审批。旧设备组的三节点入组及原来源节点暂停证据仍可追溯；新 M1 的跨设备全页面数据一致性、Poke3 接入、恢复路径和长期性能仍待 M2/M3 集成验收：
+```bash
+mkdir -p .codex-monitor
+umask 077
+(set -C; python3 -c 'import secrets; print(secrets.token_urlsafe(32))' > "$PWD/.codex-monitor/view-token.secret") \
+  || echo '令牌文件已存在或无法创建；请保留现有文件并检查路径/权限。'
+```
 
-当前最高优先级是以最短路径上线 NixOS/Linux 与 Poke3 的只读 MVP。开发只运行与本次修改直接相关的最小检查；不因全页面矩阵、长期待机、极端网络、未发布平台、重复全量测试或没有具体缺陷依据的额外安全加固延迟首发。设备身份认证、密钥保护、只读权限边界、制品签名和版本一致性属于产品可用性的必要条件，仍是发布门禁。
+如需查看令牌内容，应在可信终端中读取该私有文件；不要把令牌贴入 URL、文档、聊天或共享日志。服务只开放固定只读路由：`GET /api/stats`、`GET /api/history`，以及配置归档后可用的 `GET /api/session-archive`。Hub 密钥始终留在电脑端。归档参数可选；页面服务以 SQLite 只读方式读取现有 Token Monitor 会话用量归档（含 WAL），仅输出明确允许的展示字段。成功认证后，查看令牌保存在当前标签页的 `sessionStorage`，可在同一标签页刷新后继续使用；关闭标签页后不再保留。页面不会把查看令牌写入 `localStorage`，额度、历史和本机会话归档分别缓存允许展示的字段；刷新失败或清除缓存时各自独立保留或清除。HTTP 仅用于可信局域网。当前防火墙规则已允许现场端口，无需修改 NixOS 配置。
 
-旧 Tauri/设备组链路（待退役）优先连接已经运行的官方本地共享 App Server daemon，从而读取该 daemon 已加载会话的实时状态；daemon 不可用时回退到独立只读 App Server。它不属于 M1 当前数据源，后续迁移完成前只作为历史实现保留。
+如不使用现有凭据文件，也可以通过 `TOKEN_MONITOR_SECRET` 或 `--hub-secret-file` 提供 Hub 密钥；查看令牌可用 `EINK_VIEW_TOKEN` 或 `--view-token-file` 提供。私有令牌文件建议权限为 `0600`。
+
+## 验证与边界
+
+```bash
+python3 -m unittest discover -s tools -p 'test_token_monitor_eink.py' -v
+node --test apps/eink/test_model.mjs apps/eink/test_dashboard_model.mjs
+node --check apps/eink/app.js
+```
+
+实现与接口依据见 [墨水屏方案和验收记录](docs/token-monitor-eink.md)。2026-10-23 已在 Poke3 Chrome 85 横屏真机验证固定视口总览（12 条、两列）、按钮翻页、详情返回原页、刷新保留页码、运行中筛选和滑动不移动内容；另在 Chrome 85 中模拟 10 种尺寸（128×160 至 1920×1080），完成 140 个页面状态和 40 个图表状态检查，未发现溢出。此前真机链路、数据一致性、缓存、断线恢复等记录见方案文档，并不自动证明本轮新交互。长期耗电和物理残影未测；系统启动未配置。本轮未进行 NixOS/Home Manager 修改、系统 rebuild 或 APK 安装。`/healthz` 只表示页面服务在运行，不表示 Hub 或账号采集健康。
+
+## 历史实现
+
+以下目录及后续章节保留早期自建采集器、Tauri 和设备组实现，供追溯。它们不属于当前墨水屏页面的运行链路，旧 M1/M2/M3/M4 计划不再作为新开发任务。
 
 ## 旧实现目录（迁移前保留）
 

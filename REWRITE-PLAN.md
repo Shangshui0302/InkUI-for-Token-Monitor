@@ -1,6 +1,6 @@
 # Codex 跨设备监控台：实现方案
 
-> **已被取代：** 本文记录 2026-09-16 的设备组与 App Server 方案，仅作为历史设计保留。2026-09-17 起，开发与验收以 [Nekodex 简化监控架构](docs/simplified-monitor-architecture.md) 为准：先交付本机文件只读采集器、简单 HTTP 状态接口和 PC/Poke3 统一页面；设备目录后置，不能侵入状态采集链路。
+> **历史方案：** 当前开发与验收以 [Token Monitor 墨水屏浏览器方案](docs/token-monitor-eink.md) 为准。本文的设备组、App Server 和后续自建采集器迁移路线均已停止推进，仅保留历史设计。
 
 日期：2026-09-16。本文取代此前包含远程会话控制的方案。
 

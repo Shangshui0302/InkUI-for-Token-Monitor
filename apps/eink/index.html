@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="eink">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Token Monitor</title>
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+  <main id="app">
+    <header class="topbar">
+      <div class="identity"><strong class="brand">Σ <span>Token Monitor</span></strong><button id="status-toggle" class="status-button" type="button" aria-label="连接详情"><span id="connection">读取中</span><time id="last-time"></time></button></div>
+      <div class="period-buttons" aria-label="用量时段">
+        <button type="button" data-period="today" aria-pressed="true">日</button>
+        <button type="button" data-period="month">月</button>
+        <button type="button" data-period="allTime">累计</button>
+      </div>
+      <div class="top-actions"><button id="refresh" type="button">刷新</button><button id="settings-open" type="button">设置</button></div>
+    </header>
+    <input id="period" type="hidden" value="today">
+    <nav id="navigation" aria-label="看板页面">
+      <button type="button" data-page="overview" aria-current="page">总览</button>
+      <button type="button" data-page="limits">额度</button>
+      <button type="button" data-page="sessions">会话</button>
+      <button type="button" data-page="activity">活动</button>
+      <button type="button" data-page="details">明细</button>
+    </nav>
+    <div id="dashboard"><p class="empty">正在读取…</p></div>
+    <footer class="page-controls" aria-label="翻页">
+      <button id="page-prev" type="button" disabled>上页</button>
+      <output id="page-position" aria-live="polite">1 / 1</output>
+      <button id="page-next" type="button" disabled>下页</button>
+    </footer>
+  </main>
+  <section id="settings" class="settings-screen" role="dialog" aria-modal="true" aria-label="设置" hidden>
+    <header class="settings-header"><strong>设置</strong><button id="settings-close" type="button">返回</button></header>
+    <nav class="settings-nav" aria-label="设置页面">
+      <button type="button" data-setting="refresh" aria-pressed="true">刷新</button><button type="button" data-setting="connection">连接</button><button type="button" data-setting="token">令牌</button><button type="button" data-setting="cache">缓存</button>
+    </nav>
+    <div class="settings-body">
+      <section data-setting-pane="refresh"><p id="interval-current">每 60 秒</p><div class="settings-choices"><button type="button" data-interval="60" aria-pressed="true">60 秒</button><button type="button" data-interval="300">5 分钟</button><button type="button" data-interval="0">手动</button></div><input id="interval" type="hidden" value="60"></section>
+      <section data-setting-pane="connection" hidden><p id="last-success"></p><p id="detail">正在连接</p></section>
+      <section data-setting-pane="token" hidden><form id="auth-form"><label for="token">查看令牌</label><input id="token" type="password" autocomplete="off" spellcheck="false"><button type="submit">应用</button></form></section>
+      <section data-setting-pane="cache" hidden><button id="clear-cache" type="button">清除本机缓存</button></section>
+    </div>
+  </section>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
