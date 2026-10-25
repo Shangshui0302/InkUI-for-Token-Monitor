@@ -8,11 +8,11 @@
 
 ## 界面预览
 
-以下为按 Poke3 横屏比例渲染的界面截图，使用合成演示数据，不是真机实拍，也不含真实账号数据。
+额度页为 Poke3 真机截图；其余页面按 Poke3 横屏比例渲染，使用合成演示数据。
 
 | 额度 | 会话 |
 | --- | --- |
-| ![额度页：服务商账号、额度窗口与余额](docs/screenshots/quotas.png) | ![会话页：会话名称、模型与用量](docs/screenshots/sessions.png) |
+| ![Poke3 真机额度页：服务商账号、额度窗口与余额](docs/screenshots/quotas.png) | ![会话页：会话名称、模型与用量](docs/screenshots/sessions.png) |
 | **活动** | **明细** |
 | ![活动页：平滑实线用量趋势](docs/screenshots/activity.png) | ![明细页：总量、费用与分项](docs/screenshots/details.png) |
 
