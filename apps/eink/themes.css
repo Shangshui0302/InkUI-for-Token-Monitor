@@ -1,0 +1,199 @@
+/* 16-step grayscale; color values use a 16-level/channel software grid.
+   Kaleido reference only: browser RGB does not calibrate a physical panel. */
+:root, :root[data-theme="bw"] {
+  --paper: #ffffff;
+  --ink: #111111;
+  --muted: #555555;
+  --line: #888888;
+  --soft-line: #cccccc;
+  --panel: #eeeeee;
+  --accent: #222222;
+  --accent-soft: #eeeeee;
+  --accent-ink: #111111;
+  --inverse: #ffffff;
+  --ok: #333333;
+  --warn: #555555;
+  --danger: #000000;
+  --chart-line: #222222;
+  --heat-0: #ffffff;
+  --heat-1: #eeeeee;
+  --heat-2: #dddddd;
+  --heat-3: #cccccc;
+  --heat-4: #bbbbbb;
+  --heat-5: #aaaaaa;
+  --heat-6: #999999;
+  --heat-7: #888888;
+  --heat-8: #777777;
+  --heat-9: #666666;
+  --heat-10: #555555;
+  --heat-11: #444444;
+  --heat-12: #333333;
+  --heat-13: #222222;
+  --heat-14: #111111;
+  --heat-15: #000000;
+}
+/* Bright fills and graphics are separate from readable text colors. */
+:root[data-theme="color"] {
+  --paper: #ffffff;
+  --ink: #111111;
+  --muted: #555555;
+  --line: #888888;
+  --soft-line: #cccccc;
+  --panel: #eeeeee;
+  --inverse: #ffffff;
+  --accent-soft: var(--accent);
+  --accent-ink: #111111;
+  --ok: var(--accent-text);
+  --warn: #775511;
+  --danger: #993333;
+  --chart-line: var(--accent);
+}
+
+:root[data-theme="color"],
+:root[data-theme="color"][data-accent="blue"] {
+  --accent: #3388ff;
+  --accent-text: #0055cc;
+  --heat-0: #ffffff;
+  --heat-1: #eeffff;
+  --heat-2: #ddeeff;
+  --heat-3: #cceeff;
+  --heat-4: #bbddff;
+  --heat-5: #aaddff;
+  --heat-6: #99ccff;
+  --heat-7: #88ccff;
+  --heat-8: #77bbff;
+  --heat-9: #66bbff;
+  --heat-10: #55aaff;
+  --heat-11: #44aaff;
+  --heat-12: #3399ff;
+  --heat-13: #2299ff;
+  --heat-14: #1188ff;
+  --heat-15: #0088ff;
+}
+:root[data-theme="color"][data-accent="teal"] {
+  --accent: #00ccbb;
+  --accent-text: #007766;
+  --heat-0: #ffffff;
+  --heat-1: #eeffff;
+  --heat-2: #ddffee;
+  --heat-3: #cceeee;
+  --heat-4: #bbeeee;
+  --heat-5: #aaeeee;
+  --heat-6: #99eedd;
+  --heat-7: #88eedd;
+  --heat-8: #77dddd;
+  --heat-9: #66dddd;
+  --heat-10: #55ddcc;
+  --heat-11: #44ddcc;
+  --heat-12: #33ddcc;
+  --heat-13: #22cccc;
+  --heat-14: #11ccbb;
+  --heat-15: #00ccbb;
+}
+:root[data-theme="color"][data-accent="green"] {
+  --accent: #55cc55;
+  --accent-text: #227722;
+  --heat-0: #ffffff;
+  --heat-1: #eeffee;
+  --heat-2: #ddffee;
+  --heat-3: #cceedd;
+  --heat-4: #bbeecc;
+  --heat-5: #aaeebb;
+  --heat-6: #99eebb;
+  --heat-7: #88eeaa;
+  --heat-8: #77dd99;
+  --heat-9: #66dd88;
+  --heat-10: #55dd88;
+  --heat-11: #44dd77;
+  --heat-12: #33dd66;
+  --heat-13: #22cc55;
+  --heat-14: #11cc55;
+  --heat-15: #00cc44;
+}
+:root[data-theme="color"][data-accent="amber"] {
+  --accent: #ffbb00;
+  --accent-text: #665522;
+  --heat-0: #ffffff;
+  --heat-1: #ffffee;
+  --heat-2: #ffeedd;
+  --heat-3: #ffeecc;
+  --heat-4: #ffeebb;
+  --heat-5: #ffeeaa;
+  --heat-6: #ffdd99;
+  --heat-7: #ffdd88;
+  --heat-8: #ffdd77;
+  --heat-9: #ffdd66;
+  --heat-10: #ffcc55;
+  --heat-11: #ffcc44;
+  --heat-12: #ffcc33;
+  --heat-13: #ffcc22;
+  --heat-14: #ffbb11;
+  --heat-15: #ffbb00;
+}
+:root[data-theme="color"][data-accent="rose"] {
+  --accent: #ff5599;
+  --accent-text: #aa0044;
+  --heat-0: #ffffff;
+  --heat-1: #ffeeee;
+  --heat-2: #ffddee;
+  --heat-3: #ffccdd;
+  --heat-4: #ffbbdd;
+  --heat-5: #ffaacc;
+  --heat-6: #ff99cc;
+  --heat-7: #ff88bb;
+  --heat-8: #ff77bb;
+  --heat-9: #ff66aa;
+  --heat-10: #ff55aa;
+  --heat-11: #ff4499;
+  --heat-12: #ff3399;
+  --heat-13: #ff2288;
+  --heat-14: #ff1188;
+  --heat-15: #ff0077;
+}
+:root[data-theme="color"][data-accent="violet"] {
+  --accent: #aa66ff;
+  --accent-text: #440099;
+  --heat-0: #ffffff;
+  --heat-1: #ffeeff;
+  --heat-2: #eeddff;
+  --heat-3: #eeccff;
+  --heat-4: #ddbbff;
+  --heat-5: #ddaaff;
+  --heat-6: #cc99ff;
+  --heat-7: #cc88ff;
+  --heat-8: #bb77ff;
+  --heat-9: #bb66ff;
+  --heat-10: #aa55ff;
+  --heat-11: #aa44ff;
+  --heat-12: #9933ff;
+  --heat-13: #9922ff;
+  --heat-14: #8811ff;
+  --heat-15: #8800ff;
+}
+
+/* Color samples remain monochrome when the monochrome theme is active. */
+.accent-choice { --choice-color: var(--accent); }
+:root[data-theme="color"] .accent-choice[data-accent-choice="blue"] { --choice-color: #3388ff; }
+:root[data-theme="color"] .accent-choice[data-accent-choice="teal"] { --choice-color: #00ccbb; }
+:root[data-theme="color"] .accent-choice[data-accent-choice="green"] { --choice-color: #55cc55; }
+:root[data-theme="color"] .accent-choice[data-accent-choice="amber"] { --choice-color: #ffbb00; }
+:root[data-theme="color"] .accent-choice[data-accent-choice="rose"] { --choice-color: #ff5599; }
+:root[data-theme="color"] .accent-choice[data-accent-choice="violet"] { --choice-color: #aa66ff; }
+.accent-dot { background: var(--choice-color); }
+
+.palette-swatch:nth-child(1) { background: var(--heat-0); }
+.palette-swatch:nth-child(2) { background: var(--heat-1); }
+.palette-swatch:nth-child(3) { background: var(--heat-2); }
+.palette-swatch:nth-child(4) { background: var(--heat-3); }
+.palette-swatch:nth-child(5) { background: var(--heat-4); }
+.palette-swatch:nth-child(6) { background: var(--heat-5); }
+.palette-swatch:nth-child(7) { background: var(--heat-6); }
+.palette-swatch:nth-child(8) { background: var(--heat-7); }
+.palette-swatch:nth-child(9) { background: var(--heat-8); }
+.palette-swatch:nth-child(10) { background: var(--heat-9); }
+.palette-swatch:nth-child(11) { background: var(--heat-10); }
+.palette-swatch:nth-child(12) { background: var(--heat-11); }
+.palette-swatch:nth-child(13) { background: var(--heat-12); }
+.palette-swatch:nth-child(14) { background: var(--heat-13); }
+.palette-swatch:nth-child(15) { background: var(--heat-14); }
+.palette-swatch:nth-child(16) { background: var(--heat-15); }

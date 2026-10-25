@@ -1,17 +1,18 @@
 <!doctype html>
-<html lang="zh-CN" data-theme="eink">
+<html lang="zh-CN" data-theme="bw" data-accent="blue">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
   <title>Token Monitor</title>
+  <link rel="stylesheet" href="/themes.css">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/dashboard.css">
 </head>
 <body>
   <main id="app">
     <header class="topbar">
-      <div class="identity"><strong class="brand">Σ <span>Token Monitor</span></strong><button id="status-toggle" class="status-button" type="button" aria-label="连接详情"><span id="connection">读取中</span><time id="last-time"></time></button></div>
+      <div class="identity"><strong class="brand"><span class="brand-symbol">Σ</span> <span class="brand-word">Token Monitor</span></strong><button id="status-toggle" class="status-button" type="button" aria-label="连接详情"><span id="connection">读取中</span><time id="last-time"></time></button></div>
       <div class="period-buttons" aria-label="用量时段">
         <button type="button" data-period="today" aria-pressed="true">日</button>
         <button type="button" data-period="month">月</button>
@@ -37,9 +38,14 @@
   <section id="settings" class="settings-screen" role="dialog" aria-modal="true" aria-label="设置" hidden>
     <header class="settings-header"><strong>设置</strong><button id="settings-close" type="button">返回</button></header>
     <nav class="settings-nav" aria-label="设置页面">
-      <button type="button" data-setting="refresh" aria-pressed="true">刷新</button><button type="button" data-setting="connection">连接</button><button type="button" data-setting="token">令牌</button><button type="button" data-setting="cache">缓存</button>
+      <button type="button" data-setting="display">显示</button><button type="button" data-setting="refresh" aria-pressed="true">刷新</button><button type="button" data-setting="connection">连接</button><button type="button" data-setting="token">令牌</button><button type="button" data-setting="cache">缓存</button>
     </nav>
     <div class="settings-body">
+      <section data-setting-pane="display" hidden>
+        <div class="theme-options"><button type="button" class="theme-choice" data-theme-choice="bw" aria-pressed="true">黑白</button><button type="button" class="theme-choice" data-theme-choice="color" aria-pressed="false">彩色</button></div>
+        <div id="accent-options" class="accent-options" role="group" aria-label="重点色" hidden></div>
+        <div class="theme-preview"><span id="theme-caption">16 级灰度</span><div class="palette-strip" role="img" aria-label="从浅到深的16级色阶"><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span></div></div>
+      </section>
       <section data-setting-pane="refresh"><p id="interval-current">每 60 秒</p><div class="settings-choices"><button type="button" data-interval="60" aria-pressed="true">60 秒</button><button type="button" data-interval="300">5 分钟</button><button type="button" data-interval="0">手动</button></div><input id="interval" type="hidden" value="60"></section>
       <section data-setting-pane="connection" hidden><p id="last-success"></p><p id="detail">正在连接</p></section>
       <section data-setting-pane="token" hidden><form id="auth-form"><label for="token">查看令牌</label><input id="token" type="password" autocomplete="off" spellcheck="false"><button type="submit">应用</button></form></section>

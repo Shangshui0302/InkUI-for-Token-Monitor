@@ -1,6 +1,7 @@
 import { absoluteTime } from './model.mjs';
 import { projectDashboardStats, projectHistoryForCache, projectArchiveForCache } from './dashboard-model.mjs';
 import { createDashboard } from './dashboard.js';
+import { themeKey, accentKey, ACCENTS, normalizeTheme, normalizeAccent } from './theme.mjs';
 
 const $ = id => document.getElementById(id);
 const cacheKey = 'token-monitor-eink-snapshot-v1';
@@ -8,6 +9,34 @@ const historyCacheKey = 'token-monitor-eink-history-v1';
 const archiveCacheKey = 'token-monitor-eink-session-archive-v1';
 const intervalKey = 'token-monitor-eink-interval-v1';
 const tokenKey = 'token-monitor-eink-view-token-v1';
+function showTheme(value, accentValue) {
+  const theme = normalizeTheme(value), accent = normalizeAccent(accentValue);
+  document.documentElement.dataset.theme = theme;
+  document.documentElement.dataset.accent = accent;
+  document.querySelectorAll('[data-theme-choice]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeChoice === theme)));
+  document.querySelectorAll('[data-accent-choice]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.accentChoice === accent)));
+  $('accent-options').hidden = theme !== 'color';
+  $('theme-caption').textContent = theme === 'color' ? ACCENTS.find(a => a.id === accent).label + ' · 16 阶' : '16 级灰度';
+}
+ACCENTS.forEach(accent => {
+  const button = document.createElement('button');
+  button.type = 'button'; button.className = 'accent-choice'; button.dataset.accentChoice = accent.id;
+  const dot = document.createElement('span'); dot.className = 'accent-dot'; dot.setAttribute('aria-hidden', 'true');
+  button.appendChild(dot); button.appendChild(document.createTextNode(accent.label));
+  button.addEventListener('click', () => {
+    showTheme('color', accent.id);
+    try { localStorage.setItem(accentKey, accent.id); localStorage.setItem(themeKey, 'color'); } catch (_) { /* Keep the in-memory choice. */ }
+  });
+  $('accent-options').appendChild(button);
+});
+let savedTheme = 'bw', savedAccent = 'blue';
+try { savedTheme = localStorage.getItem(themeKey); savedAccent = localStorage.getItem(accentKey); } catch (_) { /* Storage is optional. */ }
+showTheme(savedTheme, savedAccent);
+document.querySelectorAll('[data-theme-choice]').forEach(b => b.addEventListener('click', () => {
+  const theme = normalizeTheme(b.dataset.themeChoice);
+  showTheme(theme, document.documentElement.dataset.accent);
+  try { localStorage.setItem(themeKey, theme); } catch (_) { /* Keep the in-memory choice. */ }
+}));
 const dashboard = createDashboard($('dashboard'));
 let token = '';
 try { token = sessionStorage.getItem(tokenKey) || ''; } catch (_) { /* Storage is optional. */ }
@@ -28,7 +57,7 @@ let archiveChecked = false;
 let archiveAttemptAt = 0;
 let archiveForceQueued = false;
 let refreshQueued = false;
-let collapseSettingsOnSuccess = true;
+let collapseSettingsOnSuccess = false;
 let cacheEpoch = 0;
 
 function setText(node, text) { if (node.textContent !== text) node.textContent = text; }
@@ -139,7 +168,10 @@ async function refresh(forceArchive = false) {
     snapshot = stats; receivedAt = new Date().toISOString();
     save(cacheKey, { stats, receivedAt });
     try { if (token) sessionStorage.setItem(tokenKey, token); else sessionStorage.removeItem(tokenKey); } catch (_) { /* Optional storage. */ }
-    if (collapseSettingsOnSuccess) { closeSettings(); collapseSettingsOnSuccess = false; }
+    if (collapseSettingsOnSuccess) {
+      if (!document.querySelector('[data-setting-pane="token"]').hidden) closeSettings();
+      collapseSettingsOnSuccess = false;
+    }
     render(); notice('已连接', '用量已更新；额度为各账号采集快照。');
     // Optional sources commit independently; neither failure discards stats.
     const optional = [];

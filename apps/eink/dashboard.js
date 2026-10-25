@@ -1,5 +1,6 @@
 import { normalizeStats, absoluteTime } from './model.mjs';
 import { dashboardView } from './dashboard-model.mjs';
+import { heatLevel } from './theme.mjs';
 
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const number = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
@@ -63,6 +64,15 @@ export function createDashboard(host) {
     if (secondary) node.appendChild(el('span', secondary, 'dash-secondary'));
     return node;
   }
+  function decorate(node, kind, percent = null, tone = 'normal') {
+    node.dataset.kind = kind; node.dataset.tone = tone;
+    if (finite(percent)) {
+      const meter = el('span', undefined, 'dash-meter');
+      meter.style.setProperty('--meter-width', Math.max(0, Math.min(100, percent)) + '%');
+      meter.setAttribute('aria-hidden', 'true'); node.appendChild(meter);
+    }
+    return node;
+  }
   function tabs(root, choices, selected, change) {
     const controls = el('div', undefined, 'dash-controls');
     choices.forEach(([id, label]) => { const b = actionButton(label, () => { change(id); render(); }); b.setAttribute('aria-pressed', String(id === selected)); controls.appendChild(b); }); root.appendChild(controls);
@@ -81,18 +91,20 @@ export function createDashboard(host) {
         const label = w.label.replace(/(额度|窗口)$/g, '') || w.label;
         const reset = resetIn(w.resetsAt);
         const secondary = [i === 0 ? [plan, p.account].filter(Boolean).join(' · ') : '', status.replace(/ · $/, ''), w.value !== null ? (w.valueLabel === '剩余额度' ? '剩余' : w.valueLabel) : '', reset].filter(Boolean).join(' · ');
-        rows.push(row(p.name + ' ' + label, count(w.value) + w.unit, secondary, () => open(name, fields.concat([['窗口', w.label], [w.valueLabel, count(w.value) + w.unit], ['重置', absoluteTime(w.resetsAt)]]))));
+        const remaining = w.unit === '%' && w.valueLabel === '剩余额度' ? w.value : null;
+        const tone = finite(remaining) ? remaining <= 10 ? 'danger' : remaining <= 25 ? 'warn' : 'ok' : 'normal';
+        rows.push(decorate(row(p.name + ' ' + label, count(w.value) + w.unit, secondary, () => open(name, fields.concat([['窗口', w.label], [w.valueLabel, count(w.value) + w.unit], ['重置', absoluteTime(w.resetsAt)]]))), 'quota', remaining, tone));
       });
     });
     return rows;
   }
-  function distributionRow(item) {
-    return row(item.name, compact(item.tokens), [finite(item.share) ? percentage(item.share) : '', finite(item.costUsd) ? listUsd(item.costUsd) : ''].filter(Boolean).join(' · '), () => open(item.name, [['名称', item.name], ['tokens', count(item.tokens)], ['占比', percentage(item.share)], ['估算 USD', usd(item.costUsd)]]));
+  function distributionRow(item, kind = 'model') {
+    return decorate(row(item.name, compact(item.tokens), [finite(item.share) ? percentage(item.share) : '', finite(item.costUsd) ? listUsd(item.costUsd) : ''].filter(Boolean).join(' · '), () => open(item.name, [['名称', item.name], ['tokens', count(item.tokens)], ['占比', percentage(item.share)], ['估算 USD', usd(item.costUsd)]])), kind, finite(item.share) ? item.share * 100 : null);
   }
   function sessionRow(item) {
     const label = known(item.project) ? item.project : known(item.title) ? item.title : '会话';
     const secondary = [known(item.model) ? item.model : '', finite(item.contextPercent) ? '已用 ' + count(item.contextPercent) + '%' : '', item.archived ? '已归档' : states[item.state]].filter(Boolean).join(' · ');
-    return row(label, compact(item.totalTokens), secondary, () => open('会话用量', sessionPairs(item)), 'dash-session');
+    return decorate(row(label, compact(item.totalTokens), secondary, () => open('会话用量', sessionPairs(item)), 'dash-session'), 'session', item.contextPercent, item.contextPercent >= 90 ? 'danger' : item.contextPercent >= 75 ? 'warn' : 'normal');
   }
   function summaryPairs() {
     const s = view.summary;
@@ -152,7 +164,7 @@ export function createDashboard(host) {
         tabs(surface, [['models', '模型'], ['clients', '工具'], ['projects', '项目'], ['devices', '设备'], ['source', '来源']], detailKind, id => { detailKind = id; });
         if (detailKind === 'source') rows = [row('来源与更新时间', '查看', '', () => open('数据来源', sourcePairs())), row('汇总用量', '查看', '', () => open('汇总用量', summaryPairs())), row('历史汇总', '查看', '', () => open('历史汇总', historySummaryPairs()))];
         else if (detailKind === 'devices') rows = view.devices.map(d => row(d.name, compact(d.totalTokens), [known(d.platform) ? d.platform : '', d.stale ? '过期' : '', listUsd(d.costUsd)].filter(Boolean).join(' · '), () => open(d.name, [['设备', d.name], ['平台', d.platform], ['状态', d.stale ? '已过期' : '来源未标记过期'], ['tokens', count(d.totalTokens)], ['估算 USD', usd(d.costUsd)], ['采集', absoluteTime(d.updatedAt)]])));
-        else rows = view[detailKind].map(x => distributionRow(x));
+        else rows = view[detailKind].map(x => distributionRow(x, detailKind.slice(0, -1)));
       } else if (page === 'activity') {
         tabs(surface, [['heat', '热力'], ['trend', '趋势'], ['day', '每日'], ['month', '每月']], activityKind, id => { activityKind = id; });
         const hs = view.history.summary;
@@ -217,36 +229,35 @@ export function createDashboard(host) {
       entries.forEach((e, i) => {
         const x = 18 + Math.floor((offset + i) / 7) * cell, y = labelHeight + e.day * cell;
         if (e.month !== previousMonth && ((i === 0 && new Date(e.date + 'T12:00:00').getDate() <= 15) || e.monthStart)) {
-          const text = svgEl('text', { x, y: Math.max(1, labelHeight - 2), 'font-size': Math.max(1, Math.min(font * .8, labelHeight - 1)), fill: '#000' }); text.textContent = e.month + '月'; svg.appendChild(text); previousMonth = e.month;
+          const text = svgEl('text', { x, y: Math.max(1, labelHeight - 2), 'font-size': Math.max(1, Math.min(font * .8, labelHeight - 1)), fill: 'var(--muted)' }); text.textContent = e.month + '月'; svg.appendChild(text); previousMonth = e.month;
         }
         const tokens = e.row && e.row.tokens || 0;
-        svg.appendChild(svgEl('rect', { x, y, width: Math.max(1, cell - 2), height: Math.max(1, cell - 2), fill: tokens > 0 ? '#000' : '#fff', stroke: '#000', 'stroke-width': '.5' }));
-        if (tokens > 0) svg.appendChild(svgEl('rect', { x: x + 1, y: y + 1, width: Math.max(0, cell - 4), height: Math.max(0, (cell - 4) * (1 - tokens / max)), fill: '#fff' }));
+        svg.appendChild(svgEl('rect', { x, y, width: Math.max(1, cell - 2), height: Math.max(1, cell - 2), fill: 'var(--heat-' + heatLevel(tokens, max) + ')', stroke: 'var(--soft-line)', 'stroke-width': '.5' }));
       });
       const usedHeight = labelHeight + cell * 7;
       if (chartHeight - usedHeight >= 72 && chartWidth >= 280) {
         const since = new Date(last); since.setDate(since.getDate() - 44);
         const recent = daily.filter(r => r.date >= dateKey(since) && r.date <= dateKey(last));
         const recentMax = Math.max(1, ...recent.map(r => r.tokens || 0));
-        const label = svgEl('text', { x: 2, y: usedHeight + 14, 'font-size': font * .85, fill: '#000' });
+        const label = svgEl('text', { x: 2, y: usedHeight + 14, 'font-size': font * .85, fill: 'var(--muted)' });
         label.textContent = '近45日 · 峰值 ' + (recent.length ? compact(recentMax) : '—'); svg.appendChild(label);
         let points = [];
-        const flush = () => { if (points.length) svg.appendChild(svgEl('polyline', { points: points.join(' '), fill: 'none', stroke: '#000', 'stroke-width': 1.5 })); points = []; };
+        const flush = () => { if (points.length) svg.appendChild(svgEl('polyline', { points: points.join(' '), fill: 'none', stroke: 'var(--chart-line)', 'stroke-width': 1.5 })); points = []; };
         for (let i = 0; i < 45; i++) {
           const d = new Date(since); d.setDate(d.getDate() + i); const item = lookup.get(dateKey(d));
           if (!item || !finite(item.tokens)) { flush(); continue; }
           const x = 3 + i * (chartWidth - 6) / 44;
           const y = usedHeight + 23 + (chartHeight - usedHeight - 28) * (1 - item.tokens / recentMax);
-          points.push(x + ',' + y); svg.appendChild(svgEl('circle', { cx: x, cy: y, r: 1.5, fill: '#000' }));
+          points.push(x + ',' + y); svg.appendChild(svgEl('circle', { cx: x, cy: y, r: 1.5, fill: 'var(--chart-line)' }));
         }
         flush();
       }
     } else {
       const labelHeight = Math.min(14, chartHeight / 3);
-      const peakLabel = svgEl('text', { x: 2, y: Math.max(1, labelHeight - 2), 'font-size': Math.max(1, Math.min(font * .8, labelHeight - 1)), fill: '#000' }); peakLabel.textContent = '45日峰值 ' + (peak ? compact(peak.tokens) + ' · ' + peak.date.slice(5) : '—'); svg.appendChild(peakLabel);
+      const peakLabel = svgEl('text', { x: 2, y: Math.max(1, labelHeight - 2), 'font-size': Math.max(1, Math.min(font * .8, labelHeight - 1)), fill: 'var(--muted)' }); peakLabel.textContent = '45日峰值 ' + (peak ? compact(peak.tokens) + ' · ' + peak.date.slice(5) : '—'); svg.appendChild(peakLabel);
       let points = [];
-      const flush = () => { if (points.length) svg.appendChild(svgEl('polyline', { points: points.join(' '), fill: 'none', stroke: '#000', 'stroke-width': 1.5 })); points = []; };
-      entries.forEach((e, i) => { if (!e.row || !finite(e.row.tokens)) { flush(); return; } const x = 3 + i * (chartWidth - 6) / Math.max(1, entries.length - 1), y = labelHeight + 2 + Math.max(0, chartHeight - labelHeight - 5) * (1 - e.row.tokens / max); points.push(x + ',' + y); svg.appendChild(svgEl('circle', { cx: x, cy: y, r: 1.5, fill: '#000' })); }); flush();
+      const flush = () => { if (points.length) svg.appendChild(svgEl('polyline', { points: points.join(' '), fill: 'none', stroke: 'var(--chart-line)', 'stroke-width': 1.5 })); points = []; };
+      entries.forEach((e, i) => { if (!e.row || !finite(e.row.tokens)) { flush(); return; } const x = 3 + i * (chartWidth - 6) / Math.max(1, entries.length - 1), y = labelHeight + 2 + Math.max(0, chartHeight - labelHeight - 5) * (1 - e.row.tokens / max); points.push(x + ',' + y); svg.appendChild(svgEl('circle', { cx: x, cy: y, r: 1.5, fill: 'var(--chart-line)' })); }); flush();
     }
     body.appendChild(svg);
   }
