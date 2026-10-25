@@ -1,6 +1,6 @@
-# Token Monitor Ink
+# InkUI for Token-Monitor
 
-本仓库唯一产品是 Token Monitor 墨水屏 Android APK，当前目标为 Poke3。账号管理、采集和跨设备汇总由外部 Token Monitor 提供；不在此仓库开发或维护 Hub、归档服务。
+本仓库唯一产品是连接 Token Monitor Hub 的 InkUI 墨水屏 Android APK，当前目标为 Poke3。账号管理、采集和跨设备汇总由外部 Token Monitor 提供；不在此仓库开发或维护 Hub、归档服务。
 
 - `apps/android/` 是独立 Android 工程，`apps/android/ui/` 是包内界面、数据模型与测试。
 - 通过原生固定 GET 读取 Hub 的 stats／history，兼容可选已有归档接口；保持只读客户端范围。

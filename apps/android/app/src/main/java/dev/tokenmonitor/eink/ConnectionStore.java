@@ -59,12 +59,9 @@ final class ConnectionStore {
 
     synchronized String save(String input) {
         try {
-            if (input == null || input.length() > 24576) return failure("invalid_connection");
-            JSONObject data = new JSONObject(input);
-            String hubUrl = NativePolicy.normalizeOrigin(requiredString(data, "hubUrl"));
-            String archiveUrl = NativePolicy.normalizeOrigin(requiredString(data, "archiveUrl"));
-            String hubSecret = nextSecret(data, "hubSecret", hubUrl, current.hubUrl, current.hubSecret);
-            String archiveSecret = nextSecret(data, "archiveSecret", archiveUrl, current.archiveUrl, current.archiveSecret);
+            Config candidate = candidate(input);
+            String hubUrl = candidate.hubUrl, archiveUrl = candidate.archiveUrl;
+            String hubSecret = candidate.hubSecret, archiveSecret = candidate.archiveSecret;
             boolean changed = !readable || !hubUrl.equals(current.hubUrl) || !archiveUrl.equals(current.archiveUrl)
                     || !hubSecret.equals(current.hubSecret) || !archiveSecret.equals(current.archiveSecret);
             Config next = new Config(hubUrl, hubSecret, archiveUrl, archiveSecret,
@@ -74,6 +71,17 @@ final class ConnectionStore {
             return new JSONObject().put("ok", true).put("connection", next.publicJson()).toString();
         } catch (IllegalArgumentException | org.json.JSONException e) { return failure("invalid_connection"); }
         catch (Exception e) { return failure("connection_save_failed"); }
+    }
+
+    /** Validate an unsaved candidate against one stored snapshot; never persist or advance revision. */
+    synchronized Config candidate(String input) throws Exception {
+        if (input == null || input.length() > 24576) throw new IllegalArgumentException();
+        JSONObject data = new JSONObject(input);
+        String hubUrl = NativePolicy.normalizeOrigin(requiredString(data, "hubUrl"));
+        String archiveUrl = NativePolicy.normalizeOrigin(requiredString(data, "archiveUrl"));
+        return new Config(hubUrl, nextSecret(data, "hubSecret", hubUrl, current.hubUrl, current.hubSecret),
+                archiveUrl, nextSecret(data, "archiveSecret", archiveUrl, current.archiveUrl, current.archiveSecret),
+                current.revision);
     }
 
     private static String requiredString(JSONObject data, String name) throws Exception {

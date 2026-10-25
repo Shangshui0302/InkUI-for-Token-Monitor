@@ -33,11 +33,16 @@ public final class MainActivity extends Activity {
     private FullscreenController fullscreen;
     private DeviceStatusController deviceStatus;
     private volatile boolean foreground;
+    private ConnectionTestController connectionTests;
+    private long connectionTestGeneration;
     private final Set<HttpURLConnection> activeRequests = ConcurrentHashMap.newKeySet();
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         connections = new ConnectionStore(this);
+        connectionTests = new ConnectionTestController((body, source) -> {
+            validateResponse(body, "archive".equals(source) ? "/api/session-archive" : "/api/stats");
+        }, MainActivity::classifyConnectionFailure);
         webView = new WebView(this);
         displayRefresh = new DisplayRefreshController(webView);
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
@@ -55,6 +60,8 @@ public final class MainActivity extends Activity {
         settings.setGeolocationEnabled(false);
         settings.setSaveFormData(false);
         settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+        // Native fixed GETs also have no process-level cookie jar.
+        java.net.CookieHandler.setDefault(null);
         CookieManager.getInstance().setAcceptCookie(false);
         CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false);
         webView.setVerticalScrollBarEnabled(false);
@@ -81,6 +88,13 @@ public final class MainActivity extends Activity {
             catch (Exception ignored) { return "{}"; }
         }
         @JavascriptInterface public String saveConnection(String json) { return connections.save(json); }
+        @JavascriptInterface public void testConnection(String payloadJson, String requestId) {
+            if (requestId == null || requestId.length() > 64 || !requestId.matches("[A-Za-z0-9_-]{1,64}")) return;
+            runOnUiThread(() -> startConnectionTest(payloadJson, requestId));
+        }
+        @JavascriptInterface public void cancelConnectionTest() {
+            runOnUiThread(() -> connectionTests.cancel());
+        }
         @JavascriptInterface public String getDisplayCapabilities() { return displayRefresh.capabilities(); }
         @JavascriptInterface public String getDeviceStatus() { return deviceStatus.snapshotJson(); }
         @JavascriptInterface public void setFullscreen(boolean enabled) {
@@ -146,13 +160,7 @@ public final class MainActivity extends Activity {
             else {
                 byte[] body;
                 try (InputStream in = upstream.getInputStream()) { body = NativePolicy.readLimited(in); }
-                JSONObject data = new JSONObject(new String(body, StandardCharsets.UTF_8));
-                if (!archive && path.equals("/api/stats") && (data.optJSONArray("devices") == null
-                        || data.optJSONObject("limits") == null || data.getJSONObject("limits").optJSONArray("providers") == null)) throw new IllegalArgumentException();
-                if (!archive && path.equals("/api/history") && (data.optJSONArray("daily") == null
-                        || data.optJSONArray("monthly") == null || data.optJSONObject("summary") == null)) throw new IllegalArgumentException();
-                if (archive && (!(data.opt("available") instanceof Boolean)
-                        || data.optJSONObject("sessions") == null)) throw new IllegalArgumentException();
+                JSONObject data = validateResponse(body, path);
                 result = json(200, data.toString());
             }
         } catch (org.json.JSONException | IllegalArgumentException ignored) { result = error(502, "invalid_response"); }
@@ -163,6 +171,71 @@ public final class MainActivity extends Activity {
         if (!connections.isCurrent(config)) return error(409, "connection_changed");
         if (!foreground) return error(503, "app_background");
         return result;
+    }
+
+    private static JSONObject validateResponse(byte[] body, String path) throws org.json.JSONException {
+        JSONObject data = new JSONObject(new String(body, StandardCharsets.UTF_8));
+        if (path.equals("/api/stats") && (data.optJSONArray("devices") == null
+                || data.optJSONObject("limits") == null || data.getJSONObject("limits").optJSONArray("providers") == null)) throw new IllegalArgumentException();
+        if (path.equals("/api/history") && (data.optJSONArray("daily") == null
+                || data.optJSONArray("monthly") == null || data.optJSONObject("summary") == null)) throw new IllegalArgumentException();
+        if (path.equals("/api/session-archive") && (!(data.opt("available") instanceof Boolean)
+                || data.optJSONObject("sessions") == null)) throw new IllegalArgumentException();
+        return data;
+    }
+
+    private static String classifyConnectionFailure(Exception failure) {
+        for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
+            if (cause instanceof android.system.ErrnoException
+                    && ((android.system.ErrnoException) cause).errno == android.system.OsConstants.ECONNREFUSED) return "connection_refused";
+        }
+        return ConnectionTestController.classifyFailure(failure);
+    }
+
+    private void startConnectionTest(String input, String requestId) {
+        if (isDestroyed()) return;
+        long generation = ++connectionTestGeneration;
+        connectionTests.cancel();
+        String source = "hub";
+        String origin = "";
+        try {
+            if (input == null || input.length() > 24576) throw new IllegalArgumentException();
+            JSONObject data = new JSONObject(input);
+            Object selected = data.opt("source");
+            if (!(selected instanceof String) || !(selected.equals("hub") || selected.equals("archive"))) throw new IllegalArgumentException();
+            source = (String) selected;
+            boolean archive = source.equals("archive");
+            Object selectedUrl = data.opt(archive ? "archiveUrl" : "hubUrl");
+            if (!(selectedUrl instanceof String)) throw new IllegalArgumentException();
+            origin = NativePolicy.normalizeOrigin((String) selectedUrl);
+            // Parse through the same origin/credential policy as saving, without changing the store.
+            ConnectionStore.Config candidate = connections.candidate(input);
+            String secret = archive ? candidate.archiveSecret : candidate.hubSecret;
+            if (!foreground) return;
+            connectionTests.start(requestId, source, origin, secret,
+                    () -> foreground && connections.isCurrent(candidate),
+                    result -> runOnUiThread(() -> {
+                        if (generation != connectionTestGeneration || !foreground || isDestroyed()) return;
+                        // Saving can race with a worker finishing or its queued UI callback.
+                        String error = connections.isCurrent(candidate) ? result.error : "cancelled";
+                        dispatchConnectionTest(new ConnectionTestController.Result(result.id, result.source,
+                                result.origin, error, result.latencyMs));
+                    }));
+        } catch (Exception invalid) {
+            if (foreground) dispatchConnectionTest(new ConnectionTestController.Result(
+                    requestId, source, origin, "invalid_connection", 0));
+        }
+    }
+
+    private void dispatchConnectionTest(ConnectionTestController.Result result) {
+        if (!foreground || webView == null) return;
+        try {
+            JSONObject detail = new JSONObject().put("id", result.id).put("ok", result.ok)
+                    .put("source", result.source).put("origin", result.origin).put("latencyMs", result.latencyMs);
+            if (result.error != null) detail.put("error", result.error);
+            webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('tokenmonitor:connection-test',{detail:"
+                    + detail + "}))", null);
+        } catch (org.json.JSONException ignored) { }
     }
 
     private static WebResourceResponse error(int status, String code) {
@@ -199,7 +272,8 @@ public final class MainActivity extends Activity {
         }
     }
     @Override protected void onPause() {
-        foreground = false; dispatchVisibility();
+        foreground = false; ++connectionTestGeneration; dispatchVisibility();
+        if (connectionTests != null) connectionTests.cancel();
         if (deviceStatus != null) deviceStatus.stop();
         if (fullscreen != null) fullscreen.pause();
         if (displayRefresh != null) displayRefresh.pause();
@@ -224,6 +298,8 @@ public final class MainActivity extends Activity {
         });
     }
     @Override protected void onDestroy() {
+        foreground = false; ++connectionTestGeneration;
+        if (connectionTests != null) connectionTests.destroy();
         if (deviceStatus != null) deviceStatus.stop();
         if (fullscreen != null) fullscreen.destroy();
         if (displayRefresh != null) displayRefresh.destroy();

@@ -38,11 +38,13 @@
 .dash-quota-label { display:flex; align-items:baseline; gap:6px; flex:0 0 auto; width:100%; }
 .dash-window-label { font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:.8em; line-height:1.2; }
 .dash-quota-basis { margin-left:auto; flex:0 0 auto; color:var(--muted); font-size:.68em; line-height:1.2; }
-.dash-quota-main { display:flex; align-items:center; justify-content:space-between; gap:5px; flex:1 1 0; min-height:0; }
+.dash-quota-main { display:flex; align-items:center; justify-content:space-between; gap:5px; flex:1 1 0; min-height:0; width:100%; }
 .dash-quota-figure { display:flex; flex:1 1 0; align-items:baseline; overflow:hidden; }
 .dash-quota-number { font-size:var(--quota-number-size); font-weight:500; letter-spacing:-.055em; line-height:1.12; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-variant-numeric:tabular-nums; }
 .dash-quota-unit { flex:0 0 auto; max-width:4em; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:1.1em; padding-left:3px; }
-.dash-quota-dial { width:var(--quota-dial-size); max-width:32%; height:auto; max-height:100%; flex:0 0 auto; color:var(--accent); }
+.dash-quota-dial { width:var(--quota-dial-size); height:var(--quota-dial-height); flex:0 0 auto; color:var(--accent); }
+.dash-quota-entry[data-quota-flow=stack] .dash-quota-main { flex-direction:column; justify-content:center; }
+.dash-quota-entry[data-quota-flow=stack] .dash-quota-figure { flex:0 0 auto; width:100%; justify-content:center; }
 .dash-window-note { flex:0 0 auto; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--muted); font-size:.7em; line-height:1.2; }
 .dash-quota-entry[data-tone=danger] .dash-quota-number { text-decoration:underline; text-decoration-thickness:2px; text-underline-offset:3px; }
 .dash-quota-entry[data-quota-type=text] .dash-quota-number { font-size:1.2em; letter-spacing:0; }
@@ -57,7 +59,7 @@
 .dash-session-context svg { width:27px; height:27px; flex:0 0 auto; }
 .dash-context-number { font-size:.7em; color:var(--muted); font-variant-numeric:tabular-nums; }
 .dash-metric-card { display:flex; flex-direction:column; justify-content:center; align-items:flex-start; gap:6px; }
-.dash-metric-number { font-size:2em; font-weight:500; font-variant-numeric:tabular-nums; line-height:1.05; letter-spacing:-.055em; max-width:100%; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.dash-metric-number { display:block; width:100%; flex:0 1 auto; font-size:2em; font-weight:500; font-variant-numeric:tabular-nums; line-height:1.05; letter-spacing:-.055em; max-width:100%; overflow:hidden; white-space:nowrap; text-overflow:clip; }
 .dash-body[data-layout=metric] > .dash-metric-card:first-child .dash-metric-number { color:var(--accent-text,var(--ink)); }
 .dash-distribution-card { display:flex; flex-direction:column; justify-content:space-between; gap:5px; border-top:2px solid var(--item-shade)!important; }
 .dash-distribution-card > .dash-name { flex:0 0 auto; width:100%; font-size:.85em; }

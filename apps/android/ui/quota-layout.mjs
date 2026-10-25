@@ -5,6 +5,43 @@ const METRIC_COLUMN_GAP = 10;
 const METRIC_ROW_GAP = 6;
 const GAP = 8;
 
+export const QUOTA_DIAL_ASPECT = 50 / 88;
+
+/** Size a whole account's figures together, using their actual text widths.
+ * A tall, narrow cell can put its dial below the value instead of squeezing
+ * both into a short line. Neither layout changes the packed card rectangles.
+ */
+export function planQuotaMetrics(cells, { font = 14, measure } = {}) {
+  const numbers = cells.filter(cell => cell.type !== 'text');
+  if (!numbers.length) return { numberSize: font * 1.2, flow: 'side', dialWidths: cells.map(() => 0) };
+  const widthAtOne = cell => Math.max(1, measure(cell.text, 1));
+  const preferred = Math.min(font * 4.8, ...numbers.map(cell => Math.min(cell.height * .82 / 1.12, cell.preferred)));
+  const minimum = Math.min(preferred, font * 1.8);
+  const sideDials = cells.map(cell => {
+    if (!cell.hasMeter) return 0;
+    const space = cell.width - cell.unitWidth - widthAtOne(cell) * minimum - 7;
+    const size = Math.min(cell.height / QUOTA_DIAL_ASPECT, cell.width * .44, space);
+    return size >= 28 ? size : 0;
+  });
+  const sideSize = Math.max(1, Math.min(preferred, ...numbers.map(cell => {
+    const dial = sideDials[cells.indexOf(cell)];
+    return (cell.width - cell.unitWidth - (dial ? dial + 5 : 0) - 2) / widthAtOne(cell);
+  })));
+  const metered = cells.filter(cell => cell.hasMeter);
+  const stackedSize = Math.max(1, Math.min(preferred, ...numbers.map(cell => Math.min(
+    (cell.width - cell.unitWidth - 2) / widthAtOne(cell),
+    cell.hasMeter ? (cell.height - 5) * .56 / 1.12 : cell.height / 1.12,
+  ))));
+  const stack = metered.length > 0 && stackedSize > sideSize * 1.12
+    && metered.every(cell => cell.height >= font * 5.5);
+  const numberSize = stack ? stackedSize : sideSize;
+  return {
+    numberSize, flow: stack ? 'stack' : 'side',
+    dialWidths: stack ? cells.map(cell => cell.hasMeter
+      ? Math.max(0, Math.min(cell.width * .82, (cell.height - numberSize * 1.12 - 5) / QUOTA_DIAL_ASPECT)) : 0) : sideDials,
+  };
+}
+
 /**
  * Tile a fixed viewport with content-weighted account rectangles.
  *

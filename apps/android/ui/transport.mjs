@@ -31,3 +31,39 @@ export function createTransport({ fetcher = (...args) => fetch(...args) } = {}) 
     }
   };
 }
+
+// Keep only public request identity while native code tests the transient input.
+// Late replies cannot confirm edited fields or a different source.
+export function createConnectionTester(bridge, onResult, { setTimer = setTimeout, clearTimer = clearTimeout, timeoutMs = 12000 } = {}) {
+  let sequence = 0, pending = null;
+  const cancel = () => {
+    if (!pending) return;
+    clearTimer(pending.timer); pending = null;
+    try { bridge.cancelConnectionTest?.(); } catch (_) { /* Identity is invalidated even on older bridges. */ }
+  };
+  return {
+    get pending() { return pending !== null; },
+    cancel,
+    start(payload, origin) {
+      if (pending) return false;
+      if (typeof bridge.testConnection !== 'function') return false;
+      const id = 'connection-' + (++sequence);
+      const source = payload.source;
+      pending = { id, source, origin, timer: null };
+      pending.timer = setTimer(() => {
+        if (pending?.id !== id) return;
+        cancel(); onResult({ id, source, origin, ok: false, error: 'timeout' });
+      }, timeoutMs);
+      try { bridge.testConnection(JSON.stringify(payload), id); }
+      catch (_) { cancel(); onResult({ id, source, origin, ok: false, error: 'network_error' }); }
+      return true;
+    },
+    accept(detail) {
+      if (!pending || !detail || detail.id !== pending.id || detail.source !== pending.source || (detail.ok === true && detail.origin !== pending.origin)) return false;
+      clearTimer(pending.timer); pending = null;
+      // Do not forward any native fields that could contain response/secret data.
+      onResult({ id: detail.id, source: detail.source, origin: detail.origin, ok: detail.ok === true, error: typeof detail.error === 'string' ? detail.error : '', latencyMs: detail.latencyMs });
+      return true;
+    }
+  };
+}

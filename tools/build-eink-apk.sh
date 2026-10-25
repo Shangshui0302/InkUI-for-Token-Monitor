@@ -36,7 +36,7 @@ task="assemble${variant^}"
 
 destination="$repo_dir/output/android"
 mkdir -p "$destination"
-artifact="$destination/token-monitor-eink-$variant.apk"
+artifact="$destination/inkui-$variant.apk"
 cp "$repo_dir/apps/android/app/build/outputs/apk/$variant/app-$variant.apk" "$artifact"
-sha256sum "$artifact" > "$artifact.sha256"
+(cd "$destination" && sha256sum "inkui-$variant.apk" > "inkui-$variant.apk.sha256")
 echo "APK: $artifact"

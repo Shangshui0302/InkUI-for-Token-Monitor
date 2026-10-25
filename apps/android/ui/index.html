@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="light">
-  <title>Token Monitor</title>
+  <title>InkUI for Token-Monitor</title>
   <link rel="stylesheet" href="/themes.css">
   <link rel="stylesheet" href="/styles.css">
   <link rel="stylesheet" href="/dashboard.css">
@@ -12,7 +12,7 @@
 <body>
   <main id="app">
     <header class="topbar">
-      <div class="identity"><strong class="brand"><span class="brand-symbol" aria-hidden="true">≋</span><span class="brand-word">Token Monitor</span></strong><button id="status-toggle" class="status-button icon-button" type="button" aria-label="Hub 连接详情" title="Hub 连接详情"><span id="hub-state-icon" aria-hidden="true"></span><span id="connection" class="sr-only">读取中</span><time id="last-time" class="sr-only"></time></button></div>
+      <div class="identity"><strong class="brand"><span class="brand-symbol" aria-hidden="true">≋</span><span class="brand-word">InkUI</span></strong><button id="status-toggle" class="status-button icon-button" type="button" aria-label="Hub 连接详情" title="Hub 连接详情"><span id="hub-state-icon" aria-hidden="true"></span><span id="connection" class="sr-only">读取中</span><time id="last-time" class="sr-only"></time></button></div>
       <div id="device-status" class="device-status" role="group" aria-label="设备状态">
         <time id="device-time" title="设备时间">—:—</time>
         <span id="device-network" role="img" aria-label="网络状态未知" title="网络状态未知"></span>
@@ -41,7 +41,7 @@
   <section id="settings" class="settings-screen" role="dialog" aria-modal="true" aria-label="设置" hidden>
     <header class="settings-header"><strong>设置</strong><button id="settings-close" class="icon-button" type="button" data-icon="arrow-left" aria-label="返回" title="返回"></button></header>
     <nav class="settings-nav" aria-label="设置页面">
-      <button type="button" data-setting="display">显示</button><button type="button" data-setting="refresh" aria-pressed="true">数据</button><button type="button" data-setting="screen">屏幕</button><button type="button" data-setting="connection">连接</button><button type="button" data-setting="native">编辑</button><button type="button" data-setting="cache">缓存</button>
+      <button type="button" data-setting="native" aria-pressed="true">连接</button><button type="button" data-setting="display">外观</button><button type="button" data-setting="refresh">数据</button><button type="button" data-setting="screen">屏幕</button>
     </nav>
     <div class="settings-body">
       <section data-setting-pane="display" hidden>
@@ -49,20 +49,34 @@
         <div id="accent-options" class="accent-options" role="group" aria-label="重点色" hidden></div>
         <div class="theme-preview"><span id="theme-caption">16 级灰度</span><div class="palette-strip" role="img" aria-label="从浅到深的16级色阶"><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span></div></div>
       </section>
-      <section data-setting-pane="refresh"><p id="interval-current">每 60 秒</p><div class="settings-choices"><button type="button" data-interval="60" aria-pressed="true">60 秒</button><button type="button" data-interval="300">5 分钟</button><button type="button" data-interval="0">手动</button></div><input id="interval" type="hidden" value="60"></section>
+      <section data-setting-pane="refresh"><p id="interval-current">每 60 秒</p><div class="settings-choices"><button type="button" data-interval="60" aria-pressed="true">60 秒</button><button type="button" data-interval="300">5 分钟</button><button type="button" data-interval="0">手动</button></div><input id="interval" type="hidden" value="60"><button id="cache-open" class="secondary-setting" type="button">缓存管理</button></section>
       <section data-setting-pane="screen" hidden><p id="screen-mode">由系统管理刷新</p><button id="screen-clear" type="button" disabled>清屏</button></section>
-      <section data-setting-pane="connection" class="connection-details" hidden><div class="detail-copy"><p id="last-success"></p><p id="detail">正在连接</p></div><div class="setting-pager"><button id="detail-prev" type="button">上页</button><output id="detail-position"></output><button id="detail-next" type="button">下页</button></div></section>
+      <section data-setting-pane="connection" class="connection-details" hidden><button id="connection-edit" type="button">返回连接设置</button><div class="detail-copy"><p id="last-success"></p><p id="detail">正在连接</p></div><div class="setting-pager"><button id="detail-prev" type="button">上页</button><output id="detail-position"></output><button id="detail-next" type="button">下页</button></div></section>
       <section data-setting-pane="native" id="native-connection" hidden>
-        <div class="connection-sources"><button type="button" data-connection-source="hub" aria-pressed="true">Hub</button><button type="button" data-connection-source="archive">归档</button></div>
+        <div class="connection-sources"><button type="button" data-connection-source="hub" aria-pressed="true">Hub</button><button type="button" data-connection-source="archive">可选归档</button><button id="connection-details-open" type="button">状态</button></div>
         <div id="connection-pages">
-          <div data-connection-page="address"><input id="hub-url" type="url" placeholder="Hub 地址" aria-label="Hub 地址，只填 http(s) 来源地址" autocomplete="off" autocapitalize="none" spellcheck="false"><input id="archive-url" type="url" placeholder="归档地址（可选）" aria-label="归档网关地址，可选，只填 http(s) 来源地址" autocomplete="off" autocapitalize="none" spellcheck="false" hidden></div>
-          <div data-connection-page="secret" class="secret-row" hidden><input id="hub-secret" type="password" aria-label="Hub 密钥，留空保留已有密钥" placeholder="Hub 密钥" autocomplete="off" spellcheck="false"><input id="archive-secret" type="password" aria-label="归档查看令牌，留空保留已有令牌" placeholder="归档查看令牌" autocomplete="off" spellcheck="false" hidden><button id="connection-secret-clear" type="button">清除</button></div>
-          <div data-connection-page="actions" class="connection-actions" hidden><button id="connection-save" type="button">保存并连接</button><button id="connection-test" type="button">重新连接</button></div>
-          <div data-connection-page="message" id="connection-message" hidden></div>
+          <div data-connection-page="address" class="connection-field">
+            <p id="connection-saved" class="field-help"></p>
+            <label id="connection-address-label" for="hub-url">Hub 地址</label>
+            <input id="hub-url" type="text" inputmode="url" placeholder="如 192.168.1.20" aria-label="Hub 地址" enterkeyhint="next" autocomplete="off" autocapitalize="none" spellcheck="false">
+            <input id="archive-url" type="text" inputmode="url" placeholder="归档地址，可选" aria-label="归档网关地址，可选" enterkeyhint="next" autocomplete="off" autocapitalize="none" spellcheck="false" hidden>
+            <p id="connection-address-preview" class="field-help"></p>
+          </div>
+          <div data-connection-page="secret" class="connection-field" hidden>
+            <label id="connection-secret-label" for="hub-secret">Hub 密钥</label>
+            <input id="hub-secret" type="password" aria-label="Hub 密钥，留空保留已有密钥" placeholder="Hub 密钥" enterkeyhint="done" autocomplete="off" autocapitalize="none" spellcheck="false">
+            <input id="archive-secret" type="password" aria-label="归档查看令牌，留空保留已有令牌" placeholder="归档查看令牌" enterkeyhint="done" autocomplete="off" autocapitalize="none" spellcheck="false" hidden>
+            <div class="secret-state"><span id="connection-secret-state"></span><button id="connection-secret-clear" type="button">清除密钥</button></div>
+          </div>
+          <div data-connection-page="actions" class="connection-actions" hidden>
+            <p id="connection-edit-state" aria-live="polite"></p>
+            <div class="connection-action-buttons"><button id="connection-test" type="button">测试当前输入</button><button id="connection-save" class="primary-action" type="button">保存并连接</button><button id="connection-cancel" type="button">取消修改</button></div>
+          </div>
+          <div data-connection-page="message" id="connection-message" role="status" aria-live="polite" hidden></div>
         </div>
-        <div class="setting-pager"><button id="connection-prev" type="button">上页</button><output id="connection-position"></output><button id="connection-next" type="button">下页</button></div>
+        <div class="setting-pager"><button id="connection-prev" type="button">上一步</button><output id="connection-position"></output><button id="connection-next" type="button">下一步</button></div>
       </section>
-      <section data-setting-pane="cache" hidden><button id="clear-cache" type="button">清除本机缓存</button></section>
+      <section data-setting-pane="cache" class="cache-settings" hidden><p id="cache-message">清除本机保存的用量、历史和会话快照；连接配置会保留。</p><button id="clear-cache" type="button">确认清除缓存</button><button id="cache-cancel" type="button">返回数据设置</button></section>
     </div>
   </section>
   <script type="module" src="/app.js"></script>

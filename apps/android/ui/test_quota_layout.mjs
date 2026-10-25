@@ -1,7 +1,59 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
-import { planQuotaPages } from './quota-layout.mjs';
+import { planQuotaPages, planQuotaMetrics, QUOTA_DIAL_ASPECT } from './quota-layout.mjs';
+
+const measure = (text, size) => text.length * size * .52;
+const cell = (text, extra = {}) => ({ text, type: 'percent', hasMeter: true,
+  width: 160, height: 100, unitWidth: 16, preferred: 60, ...extra });
+function assertMetricsFit(cells, plan) {
+  cells.forEach((c, index) => {
+    if (c.type === 'text') return;
+    const figure = measure(c.text, plan.numberSize) + c.unitWidth;
+    const dial = plan.dialWidths[index];
+    assert.ok(figure <= c.width + 1e-6, 'complete amount and unit fit');
+    assert.ok(dial <= c.width + 1e-6);
+    if (plan.flow === 'side') {
+      assert.ok(figure + (dial ? dial + 5 : 0) <= c.width + 1e-6);
+      assert.ok(Math.max(plan.numberSize * 1.12, dial * QUOTA_DIAL_ASPECT) <= c.height + 1e-6);
+    } else assert.ok(plan.numberSize * 1.12 + (dial ? dial * QUOTA_DIAL_ASPECT + 5 : 0) <= c.height + 1e-6);
+  });
+}
+
+test('mixed decimal percentages use one readable size and stack in tall narrow cells', () => {
+  const cells = ['84.71', '97.12', '100', '100'].map(value => cell(value));
+  const plan = planQuotaMetrics(cells, { measure });
+  assert.equal(plan.flow, 'stack');
+  assert.ok(plan.numberSize >= 40);
+  assert.equal(new Set(plan.dialWidths).size, 1);
+  assertMetricsFit(cells, plan);
+});
+
+test('a single wide quota grows its dial with the available area', () => {
+  const small = [cell('100', { width: 230, height: 80 })];
+  const large = [cell('100', { width: 460, height: 180, preferred: 90 })];
+  const a = planQuotaMetrics(small, { measure }), b = planQuotaMetrics(large, { measure });
+  assert.equal(a.flow, 'side'); assert.equal(b.flow, 'side');
+  assert.ok(a.dialWidths[0] >= 80);
+  assert.ok(b.dialWidths[0] > 100 && b.dialWidths[0] > a.dialWidths[0]);
+  assertMetricsFit(small, a); assertMetricsFit(large, b);
+});
+
+test('mixed amounts, expanded final rows and unknown values share a fitting size', () => {
+  for (const width of [121, 145, 190, 300, 600]) for (const height of [35, 55, 90, 180]) {
+    const cells = [cell('HK$12,345.67', { width, height, unitWidth: 0, hasMeter: false }),
+      cell('0', { width, height }), cell('—', { width: width * 2, height, hasMeter: false }),
+      cell('不限量', { width, height, unitWidth: 0, type: 'unlimited', hasMeter: false })];
+    assertMetricsFit(cells, planQuotaMetrics(cells, { measure }));
+  }
+});
+
+test('account status text does not shrink quota figures or create a dial', () => {
+  const status = cell('A very long account status', { type: 'text', hasMeter: false });
+  const cells = [cell('100'), status];
+  assert.equal(planQuotaMetrics(cells, { measure }).numberSize, planQuotaMetrics(cells.slice(0, 1), { measure }).numberSize);
+  assert.deepEqual(planQuotaMetrics([status], { measure }).dialWidths, [0]);
+});
 
 const account = (itemCount, extra = {}) => ({ itemCount, hasIdentity: true, hasNote: true, ...extra });
 const EPSILON = 1e-6;

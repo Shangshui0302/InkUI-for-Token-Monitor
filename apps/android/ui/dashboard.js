@@ -4,7 +4,7 @@ import { heatLevel } from './theme.mjs';
 import { icon } from './icons.mjs';
 import { trendGeometry } from './charts.mjs';
 import { providerQuotaEntries, quotaPresentation, providerQuotaPairs, quotaWindowPairs, quotaAmount, quotaCompactNumber } from './quota-presentation.mjs';
-import { planQuotaPages } from './quota-layout.mjs';
+import { planQuotaPages, planQuotaMetrics, QUOTA_DIAL_ASPECT } from './quota-layout.mjs';
 
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const number = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
@@ -61,6 +61,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
   function key() { return drill ? 'drill' : page + ':' + period + ':' + (page === 'details' ? detailKind : page === 'activity' ? activityKind : page === 'sessions' ? runningOnly : page === 'limits' ? (providerPicker ? 'providers' : 'windows:' + providerKey) : ''); }
   function actionButton(label, fn, className = 'dash-tab') {
     const b = el('button', label, className); b.type = 'button';
+    b.dataset.focusKey = key() + ':' + className + ':' + (label || '');
     b.dataset.dashAction = String(actions.push(fn) - 1); return b;
   }
   function open(title, pairs) { drill = { title, pairs }; positions.drill = 0; render(); }
@@ -80,7 +81,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
   }
   function tone(value) { return !finite(value) ? 'normal' : value <= 10 ? 'danger' : value <= 25 ? 'warn' : 'ok'; }
   function quotaDial(value) {
-    const svg = svgEl('svg', { viewBox: '0 0 100 62', class: 'dash-quota-dial', 'aria-hidden': 'true' });
+    const svg = svgEl('svg', { viewBox: '6 6 88 50', class: 'dash-quota-dial', 'aria-hidden': 'true' });
     // A quiet half-dial complements the number; the number remains authoritative.
     const arc = 'M10 50 A40 40 0 0 1 90 50';
     svg.append(svgEl('path', { d: arc, fill: 'none', stroke: 'var(--soft-line)', 'stroke-width': 5 }));
@@ -138,6 +139,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
       return { items: choices.map(p => () => {
         const chosen = p.key === providerKey;
         const node = actionButton(undefined, () => { providerKey = p.key; providerPicker = false; render(); host.querySelector('#quota-provider-selector')?.focus(); }, 'dash-provider-option');
+        node.dataset.focusKey = 'provider-option:' + (p.key === null ? 'all' : providerIdentity(data.stats.limits.providers[p.key]));
         const identity = el('span', undefined, 'dash-provider-identity');
         identity.append(el('strong', p.name, 'dash-name'));
         const note = [p.key === null ? '' : visibleAccount(p), p.stale ? '过期' : p.ok === false ? p.status : ''].filter(Boolean).join(' · ');
@@ -184,9 +186,9 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     section.style.height = fragment.height + 'px';
     section.style.setProperty('--quota-header-height', fragment.headerHeight + 'px');
     section.style.setProperty('--quota-metric-height', fragment.metricHeight + 'px');
-    section.style.setProperty('--quota-dial-size', Math.min(100, Math.max(56, fragment.metricHeight * .85)) + 'px');
     const heading = el('div', undefined, 'dash-provider-heading');
     const info = actionButton(undefined, () => open(title, providerQuotaPairs(p)), 'dash-provider-info');
+    info.dataset.focusKey = 'provider:' + providerIdentity(data.stats.limits.providers[p.key]);
     info.setAttribute('aria-label', title + ' · 账号详情');
     info.append(el('strong', p.name, 'dash-name'));
     if (identity) info.append(el('span', identity, 'dash-quota-identity'));
@@ -196,6 +198,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     if (attachment && fragment.showAttachment) {
       const reading = quotaPresentation(p, attachment.w);
       const coupon = actionButton(undefined, () => open(title + ' · 重置券', quotaWindowPairs(p, attachment.w)), 'dash-quota-coupon');
+      coupon.dataset.focusKey = info.dataset.focusKey + ':coupon';
       coupon.append(icon('ticket'), el('span', '重置券'), el('strong', quotaCompactNumber(reading.value)), el('span', '张'));
       coupon.dataset.providerKey = p.key; coupon.dataset.windowIndex = attachment.index; coupon.dataset.quotaType = reading.type;
       coupon.setAttribute('aria-label', title + ' · 可用重置券 ' + quotaAmount(reading.value, reading.unit) + ' · ' + quotaBoundary(attachment.w, reading));
@@ -211,11 +214,28 @@ export function createDashboard(host, onDisplayChange = () => {}) {
         return (quotaTextMeasure ? quotaTextMeasure.measureText(text).width : text.length * size * .65) + Math.max(0, text.length - 1) * spacing;
       };
       metrics.style.gridTemplateColumns = 'repeat(' + (tail ? fragment.columns * tail : fragment.columns) + ',minmax(0,1fr))';
-      group.primary.slice(fragment.start, fragment.start + fragment.count).forEach(({ w, index }, localIndex) => {
+      const cells = group.primary.slice(fragment.start, fragment.start + fragment.count).map(({ w, index }, localIndex) => {
         const reading = quotaPresentation(p, w), boundary = quotaBoundary(w, reading);
-        const item = actionButton(undefined, () => open(title + ' · ' + reading.title, quotaWindowPairs(p, w)), 'dash-quota-entry');
+        const symbol = { CNY: '¥', USD: '$', EUR: '€', GBP: '£', HKD: 'HK$' }[reading.unit];
+        const numericText = reading.text || (symbol || '') + (reading.unit === '%' ? count(reading.value) : quotaCompactNumber(reading.value));
+        const unit = reading.unit && !symbol && !reading.text ? reading.unit === 'CREDITS' ? '点' : reading.unit : '';
+        const rowColumns = tail && localIndex >= fragment.count - tail ? tail : fragment.columns;
         const valueRoom = fragment.metricHeight - 5 - font * .8 * 1.2 - (boundary || reading.detail ? font * .7 * 1.2 + 4 : 2);
-        let numberSize = Math.min(font * 4, Math.max(font * 2.1, fragment.metricHeight * .52), (valueRoom - 1) / 1.12);
+        return { w, index, reading, boundary, numericText, unit,
+          // Reserve at least three percentage digits so 9 -> 50 -> 100 does
+          // not resize the group. Longer decimal amounts keep their precision.
+          text: reading.unit === '%' && textWidth(numericText, 1, '500', -.055) < textWidth('100', 1, '500', -.055) ? '100' : numericText,
+          type: reading.type, hasMeter: finite(reading.meter),
+          width: (fragment.width - 16 - (rowColumns - 1) * 10) / rowColumns - 8,
+          height: valueRoom - 1,
+          unitWidth: unit ? textWidth(unit, font * 1.1, '400') + 3 : 0,
+          preferred: Math.max(font * 2.1, fragment.metricHeight * .52) };
+      });
+      const sizing = planQuotaMetrics(cells, { font, measure: (text, size) => textWidth(text, size, '500', size * -.055) });
+      metrics.style.setProperty('--quota-number-size', sizing.numberSize + 'px');
+      cells.forEach(({ w, index, reading, boundary, numericText, unit }, localIndex) => {
+        const item = actionButton(undefined, () => open(title + ' · ' + reading.title, quotaWindowPairs(p, w)), 'dash-quota-entry');
+        item.dataset.focusKey = info.dataset.focusKey + ':window:' + index + ':' + reading.title;
         // Share the last row between its actual windows instead of leaving
         // empty grid slots; retain source order and the same readable height.
         if (tail) item.style.gridColumn = 'span ' + (localIndex >= fragment.count - tail ? fragment.columns : tail);
@@ -225,26 +245,10 @@ export function createDashboard(host, onDisplayChange = () => {}) {
         const label = el('span', undefined, 'dash-quota-label');
         label.append(el('span', reading.title, 'dash-window-label'), el('span', reading.label, 'dash-quota-basis')); item.append(label);
         const main = el('span', undefined, 'dash-quota-main'), numeric = el('span', undefined, 'dash-quota-figure');
-        const symbol = { CNY: '¥', USD: '$', EUR: '€', GBP: '£', HKD: 'HK$' }[reading.unit];
-        const numericText = reading.text || (symbol || '') + (reading.unit === '%' ? count(reading.value) : quotaCompactNumber(reading.value));
-        const unit = reading.unit && !symbol && !reading.text ? reading.unit === 'CREDITS' ? '点' : reading.unit : '';
-        // Fit the authoritative amount before allocating decorative chart space.
-        // Card geometry remains stable when only the measured value changes.
-        const rowColumns = tail && localIndex >= fragment.count - tail ? tail : fragment.columns;
-        const valueWidth = (fragment.width - 16 - (rowColumns - 1) * 10) / rowColumns - 8;
-        const unitWidth = unit ? textWidth(unit, font * 1.1, '400') + 3 : 0;
-        let dialWidth = finite(reading.meter) ? Math.min(100, Math.max(56, fragment.metricHeight * .85), valueWidth * .32) : 0;
-        if (reading.type !== 'text') {
-          const minimum = Math.min(numberSize, font * 1.8);
-          const minWidth = textWidth(numericText, minimum, '500', minimum * -.055);
-          if (dialWidth && minWidth + unitWidth + dialWidth + 7 > valueWidth) dialWidth = Math.max(0, valueWidth - minWidth - unitWidth - 7);
-          if (dialWidth < 28) dialWidth = 0;
-          const available = valueWidth - unitWidth - (dialWidth ? dialWidth + 5 : 0) - 2;
-          const requested = textWidth(numericText, numberSize, '500', numberSize * -.055);
-          if (requested > available) numberSize *= Math.max(1, available) / requested;
-        }
-        item.style.setProperty('--quota-number-size', numberSize + 'px');
+        const dialWidth = sizing.dialWidths[localIndex];
+        item.dataset.quotaFlow = sizing.flow;
         item.style.setProperty('--quota-dial-size', dialWidth + 'px');
+        item.style.setProperty('--quota-dial-height', dialWidth * QUOTA_DIAL_ASPECT + 'px');
         numeric.append(el('strong', numericText, 'dash-quota-number'));
         if (unit) numeric.append(el('span', unit, 'dash-quota-unit'));
         main.append(numeric); if (dialWidth) main.append(quotaDial(reading.meter)); item.append(main);
@@ -260,6 +264,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     const fields = [['名称', item.name], ['tokens', count(item.tokens)], ['占比', percentage(item.share)], ['估算 USD', usd(item.costUsd)]];
     if (!cards) return row(item.name, compact(item.tokens), percentage(item.share), () => open(item.name, fields));
     const card = actionButton(undefined, () => open(item.name, fields), 'dash-card dash-distribution-card');
+    card.dataset.focusKey = key() + ':distribution:' + kind + ':' + item.name;
     card.append(el('span', item.name, 'dash-name'), el('strong', compact(item.tokens), 'dash-metric-number'));
     const foot = el('span', undefined, 'dash-card-foot');
     foot.append(el('span', percentage(item.share), 'dash-rank-share'), el('span', listUsd(item.costUsd), 'dash-secondary'));
@@ -269,8 +274,13 @@ export function createDashboard(host, onDisplayChange = () => {}) {
   function sessionItem(item, cards) {
     const title = known(item.title) ? item.title : known(item.project) ? item.project : '会话';
     const status = item.archived ? '已归档' : states[item.state];
-    if (!cards) return row(title, compact(item.totalTokens), [item.model, status].filter(Boolean).join(' · '), () => open('会话用量', sessionPairs(item)));
+    if (!cards) {
+      const compactRow = row(title, compact(item.totalTokens), [item.model, status].filter(Boolean).join(' · '), () => open('会话用量', sessionPairs(item)));
+      compactRow.dataset.focusKey = key() + ':session:' + item.key;
+      return compactRow;
+    }
     const card = actionButton(undefined, () => open('会话用量', sessionPairs(item)), 'dash-card dash-session-card');
+    card.dataset.focusKey = key() + ':session:' + item.key;
     card.dataset.state = item.state;
     const identity = el('span', undefined, 'dash-session-identity');
     identity.append(el('strong', title, 'dash-name'), el('span', [known(item.model) ? item.model : '', status].filter(Boolean).join(' · '), 'dash-secondary'));
@@ -302,8 +312,22 @@ export function createDashboard(host, onDisplayChange = () => {}) {
   function metric(label, value, note, fn, cards) {
     if (!cards) return row(label, value, note, fn);
     const card = actionButton(undefined, fn, 'dash-card dash-metric-card');
+    card.dataset.focusKey = key() + ':metric:' + label;
     card.append(el('span', label, 'dash-secondary'), el('strong', value, 'dash-metric-number'));
     if (note) card.append(el('span', note, 'dash-secondary')); return card;
+  }
+  function fitMetricNumbers(root) {
+    root.querySelectorAll('.dash-metric-number').forEach(node => {
+      let size = parseFloat(getComputedStyle(node).fontSize);
+      if (!Number.isFinite(size) || !node.clientWidth) return;
+      // scrollWidth measures the full unwrapped text even when the visible box clips it.
+      for (let attempt = 0; attempt < 8 && node.scrollWidth > node.clientWidth; attempt++) {
+        const next = Math.max(8, size * (node.clientWidth - 1) / node.scrollWidth * .98);
+        if (next >= size) break;
+        node.style.fontSize = next + 'px';
+        size = next;
+      }
+    });
   }
   function distributionHeader(surface, items, height) {
     const positive = items.filter(x => finite(x.tokens) && x.tokens > 0);
@@ -326,6 +350,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     graphic.append(legend); button.append(graphic); surface.append(button);
   }
   function render(reason = 'page') {
+    const focused = host.contains(document.activeElement) ? document.activeElement : null;
     actions = [];
     const surface = el('div', undefined, 'dash-surface');
     const width = host.clientWidth, height = host.clientHeight;
@@ -383,7 +408,11 @@ export function createDashboard(host, onDisplayChange = () => {}) {
       body.id = 'quota-provider-options';
       if (providerPicker) { body.setAttribute('role', 'menu'); body.setAttribute('aria-labelledby', 'quota-provider-selector'); }
     }
-    const previous=host.firstElementChild;if(previous)previous.remove();host.append(surface);
+    // Measure the next tree without detaching the current one. An unchanged
+    // snapshot must not blur the user's selected control or redraw the panel.
+    const previous = host.firstElementChild;
+    surface.style.position = 'absolute'; surface.style.inset = '0'; surface.style.visibility = 'hidden';
+    host.append(surface);
     const available=Math.max(1,body.clientHeight);
     const quotaPlan = layout === 'quota' && quotaGroups.length ? quotaLayout(quotaGroups, width, available, font) : null;
     if (layout === 'quota' && (!quotaPlan || quotaPlan.compact)) layout = 'rows';
@@ -404,8 +433,22 @@ export function createDashboard(host, onDisplayChange = () => {}) {
       if(available<rowHeight){body.classList.add('dash-cramped');body.style.fontSize=Math.max(1,Math.min(font,available/1.4))+'px';}
       rows.slice(currentIndex*size,(currentIndex+1)*size).forEach(item=>body.append(typeof item==='function'?item():item));
     }
+    fitMetricNumbers(surface);
+    surface.style.removeProperty('position'); surface.style.removeProperty('inset'); surface.style.removeProperty('visibility');
     const changed = !previous || !previous.isEqualNode(surface);
-    if(!changed){surface.remove();host.append(previous);}updatePager();
+    if (!changed) surface.remove();
+    else if (previous) {
+      previous.remove();
+      if (focused && !host.closest('[inert]')) {
+        const matches = [...surface.querySelectorAll('button')].filter(node =>
+          focused.id ? node.id === focused.id : node.dataset.focusKey === focused.dataset.focusKey);
+        // Ambiguous identities or removed entries return to page controls,
+        // never silently move focus to a different account with the same index.
+        const target = matches.length === 1 ? matches[0] : surface.querySelector('button');
+        target?.focus({ preventScroll: true });
+      }
+    }
+    updatePager();
     if(changed)onDisplayChange(reason);
   }
   function drawTrend(svg, daily, start, end, width, height, offset = 0, font = 12) {
