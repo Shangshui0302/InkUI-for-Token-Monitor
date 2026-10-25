@@ -1,16 +1,4 @@
-/target/
-**/target/
-/crates/*/Cargo.lock
-/result
-/result-*/
-/apps/ui/dist/
-/apps/ui/node_modules/
 .direnv/
-apps/shell/src-tauri/target/
-/plugins/*/android/.tauri/
-/plugins/*/android/build/
-p0-appserver-events.jsonl
-p0-approval.txt
 
 # Local runtime state and credentials
 .codex-monitor/
@@ -24,7 +12,7 @@ __pycache__/
 
 # Local design and research references
 /reference/
-/output/playwright/
+/output/
 
 # Standalone Android builds and private signing material
 /apps/android/.gradle/
@@ -32,6 +20,5 @@ __pycache__/
 /apps/android/app/build/
 /apps/android/local.properties
 /apps/android/keystore.properties
-/output/android/
 *.keystore
 *.jks

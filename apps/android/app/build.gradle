@@ -13,7 +13,7 @@ if (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') }
 }
 
 def einkAssets = tasks.register('stageEinkAssets', Sync) {
-    from('../../eink') {
+    from('../ui') {
         include 'index.html', 'styles.css', 'themes.css', 'dashboard.css', 'app.js',
                 'model.mjs', 'dashboard-model.mjs', 'dashboard.js', 'theme.mjs',
                 'connection.mjs', 'transport.mjs'

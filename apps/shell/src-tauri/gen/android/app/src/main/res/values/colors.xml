@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<resources>
-    <color name="eink_surface">#FFF7F7F2</color>
-    <color name="eink_primary">#FF20221E</color>
-    <color name="eink_accent">#FFA05A1F</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
-</resources>

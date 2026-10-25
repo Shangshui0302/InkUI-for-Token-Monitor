@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="bw" data-accent="blue">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Token Monitor</title>
+  <link rel="stylesheet" href="/themes.css">
+  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/dashboard.css">
+</head>
+<body>
+  <main id="app">
+    <header class="topbar">
+      <div class="identity"><strong class="brand"><span class="brand-symbol">Σ</span> <span class="brand-word">Token Monitor</span></strong><button id="status-toggle" class="status-button" type="button" aria-label="连接详情"><span id="connection">读取中</span><time id="last-time"></time></button></div>
+      <div class="period-buttons" aria-label="用量时段">
+        <button type="button" data-period="today" aria-pressed="true">日</button>
+        <button type="button" data-period="month">月</button>
+        <button type="button" data-period="allTime">累计</button>
+      </div>
+      <div class="top-actions"><button id="refresh" type="button">刷新</button><button id="settings-open" type="button">设置</button></div>
+    </header>
+    <input id="period" type="hidden" value="today">
+    <nav id="navigation" aria-label="看板页面">
+      <button type="button" data-page="overview" aria-current="page">总览</button>
+      <button type="button" data-page="limits">额度</button>
+      <button type="button" data-page="sessions">会话</button>
+      <button type="button" data-page="activity">活动</button>
+      <button type="button" data-page="details">明细</button>
+    </nav>
+    <div id="dashboard"><p class="empty">正在读取…</p></div>
+    <footer class="page-controls" aria-label="翻页">
+      <button id="page-prev" type="button" disabled>上页</button>
+      <output id="page-position" aria-live="polite">1 / 1</output>
+      <button id="page-next" type="button" disabled>下页</button>
+    </footer>
+  </main>
+  <section id="settings" class="settings-screen" role="dialog" aria-modal="true" aria-label="设置" hidden>
+    <header class="settings-header"><strong>设置</strong><button id="settings-close" type="button">返回</button></header>
+    <nav class="settings-nav" aria-label="设置页面">
+      <button type="button" data-setting="display">显示</button><button type="button" data-setting="refresh" aria-pressed="true">刷新</button><button type="button" data-setting="connection">连接</button><button type="button" data-setting="native">编辑</button><button type="button" data-setting="cache">缓存</button>
+    </nav>
+    <div class="settings-body">
+      <section data-setting-pane="display" hidden>
+        <div class="theme-options"><button type="button" class="theme-choice" data-theme-choice="bw" aria-pressed="true">黑白</button><button type="button" class="theme-choice" data-theme-choice="color" aria-pressed="false">彩色</button></div>
+        <div id="accent-options" class="accent-options" role="group" aria-label="重点色" hidden></div>
+        <div class="theme-preview"><span id="theme-caption">16 级灰度</span><div class="palette-strip" role="img" aria-label="从浅到深的16级色阶"><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span></div></div>
+      </section>
+      <section data-setting-pane="refresh"><p id="interval-current">每 60 秒</p><div class="settings-choices"><button type="button" data-interval="60" aria-pressed="true">60 秒</button><button type="button" data-interval="300">5 分钟</button><button type="button" data-interval="0">手动</button></div><input id="interval" type="hidden" value="60"></section>
+      <section data-setting-pane="connection" class="connection-details" hidden><div class="detail-copy"><p id="last-success"></p><p id="detail">正在连接</p></div><div class="setting-pager"><button id="detail-prev" type="button">上页</button><output id="detail-position"></output><button id="detail-next" type="button">下页</button></div></section>
+      <section data-setting-pane="native" id="native-connection" hidden>
+        <div class="connection-sources"><button type="button" data-connection-source="hub" aria-pressed="true">Hub</button><button type="button" data-connection-source="archive">归档</button></div>
+        <div id="connection-pages">
+          <div data-connection-page="address"><input id="hub-url" type="url" placeholder="Hub 地址" aria-label="Hub 地址，只填 http(s) 来源地址" autocomplete="off" autocapitalize="none" spellcheck="false"><input id="archive-url" type="url" placeholder="归档地址（可选）" aria-label="归档网关地址，可选，只填 http(s) 来源地址" autocomplete="off" autocapitalize="none" spellcheck="false" hidden></div>
+          <div data-connection-page="secret" class="secret-row" hidden><input id="hub-secret" type="password" aria-label="Hub 密钥，留空保留已有密钥" placeholder="Hub 密钥" autocomplete="off" spellcheck="false"><input id="archive-secret" type="password" aria-label="归档查看令牌，留空保留已有令牌" placeholder="归档查看令牌" autocomplete="off" spellcheck="false" hidden><button id="connection-secret-clear" type="button">清除</button></div>
+          <div data-connection-page="actions" class="connection-actions" hidden><button id="connection-save" type="button">保存并连接</button><button id="connection-test" type="button">重新连接</button></div>
+          <div data-connection-page="message" id="connection-message" hidden></div>
+        </div>
+        <div class="setting-pager"><button id="connection-prev" type="button">上页</button><output id="connection-position"></output><button id="connection-next" type="button">下页</button></div>
+      </section>
+      <section data-setting-pane="cache" hidden><button id="clear-cache" type="button">清除本机缓存</button></section>
+    </div>
+  </section>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>
