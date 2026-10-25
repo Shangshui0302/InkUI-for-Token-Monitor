@@ -8,7 +8,7 @@
 
 ## 界面预览
 
-额度页为 Poke3 真机截图；其余页面按 Poke3 横屏比例渲染，使用合成演示数据。
+黑白额度页为 Poke3 真机截图，其余预览使用合成数据。六种亮色配色均展示相同数据和尺寸的额度页，为浏览器渲染，不代表实体彩屏实测。
 
 | 额度 | 会话 |
 | --- | --- |
@@ -16,9 +16,19 @@
 | **活动** | **明细** |
 | ![活动页：平滑实线用量趋势](docs/screenshots/activity.png) | ![明细页：总量、费用与分项](docs/screenshots/details.png) |
 
-| 设置 | 亮色模式 |
+### 设置预览
+
+![设置预览：连接、外观、数据与屏幕](docs/screenshots/settings.png)
+
+### 亮色配色预览
+
+| 蓝 | 青 |
 | --- | --- |
-| ![设置：连接、外观、数据与屏幕](docs/screenshots/settings.png) | ![亮色模式：重点色与灰阶界面](docs/screenshots/colors.png) |
+| ![蓝色配色额度页](docs/screenshots/quotas-blue.png) | ![青色配色额度页](docs/screenshots/quotas-teal.png) |
+| **绿** | **琥珀** |
+| ![绿色配色额度页](docs/screenshots/quotas-green.png) | ![琥珀色配色额度页](docs/screenshots/quotas-amber.png) |
+| **玫瑰** | **紫** |
+| ![玫瑰色配色额度页](docs/screenshots/quotas-rose.png) | ![紫色配色额度页](docs/screenshots/quotas-violet.png) |
 
 ## 安装与连接
 
