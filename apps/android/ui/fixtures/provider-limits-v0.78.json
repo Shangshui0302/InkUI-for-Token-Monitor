@@ -1,0 +1,4875 @@
+{
+  "schemaVersion": 1,
+  "upstreamTag": "v0.78.0",
+  "provenance": {
+    "kind": "synthetic-source-contract",
+    "sourceRoot": "https://github.com/Javis603/token-monitor/blob/v0.78.0/src/",
+    "registrySources": [
+      {
+        "path": "shared/limits/providers.js",
+        "lines": [
+          37,
+          68
+        ]
+      },
+      {
+        "path": "shared/limits/accounts.js",
+        "lines": [
+          94,
+          124
+        ]
+      },
+      {
+        "path": "shared/limits/registry.js",
+        "lines": [
+          15,
+          20
+        ]
+      }
+    ],
+    "providerCatalog": [
+      {
+        "id": "claude",
+        "name": "Claude"
+      },
+      {
+        "id": "codex",
+        "name": "Codex"
+      },
+      {
+        "id": "opencode",
+        "name": "OpenCode"
+      },
+      {
+        "id": "cursor",
+        "name": "Cursor"
+      },
+      {
+        "id": "antigravity",
+        "name": "Antigravity"
+      },
+      {
+        "id": "cline",
+        "name": "Cline"
+      },
+      {
+        "id": "factory",
+        "name": "Factory Droid"
+      },
+      {
+        "id": "kimi",
+        "name": "Kimi"
+      },
+      {
+        "id": "grok",
+        "name": "Grok"
+      },
+      {
+        "id": "copilot",
+        "name": "GitHub Copilot"
+      },
+      {
+        "id": "zed",
+        "name": "Zed"
+      },
+      {
+        "id": "commandcode",
+        "name": "Command Code"
+      },
+      {
+        "id": "mimo",
+        "name": "Xiaomi MiMo"
+      },
+      {
+        "id": "zai",
+        "name": "GLM"
+      },
+      {
+        "id": "zaiteam",
+        "name": "GLM Team"
+      },
+      {
+        "id": "kiro",
+        "name": "Kiro"
+      },
+      {
+        "id": "workbuddy",
+        "name": "WorkBuddy"
+      },
+      {
+        "id": "qoder",
+        "name": "Qoder"
+      },
+      {
+        "id": "deepseek",
+        "name": "DeepSeek"
+      },
+      {
+        "id": "devin",
+        "name": "Devin"
+      },
+      {
+        "id": "minimax",
+        "name": "Minimax"
+      },
+      {
+        "id": "typesafe",
+        "name": "TypeSafe"
+      },
+      {
+        "id": "openrouter",
+        "name": "OpenRouter"
+      },
+      {
+        "id": "volcengine",
+        "name": "Volcengine"
+      },
+      {
+        "id": "ollama",
+        "name": "Ollama"
+      },
+      {
+        "id": "trae",
+        "name": "Trae CN"
+      },
+      {
+        "id": "alibaba",
+        "name": "Alibaba Cloud"
+      },
+      {
+        "id": "stepfun",
+        "name": "StepFun"
+      },
+      {
+        "id": "notion",
+        "name": "Notion AI"
+      },
+      {
+        "id": "thirdparty",
+        "name": "Third-party APIs"
+      }
+    ],
+    "note": "Invented values. Some cases combine alternative mapper branches for display coverage; no claim these coexist on a real account. No credentials, real account data, network probes.",
+    "upstreamCommit": "d52e0b9cf970a03a30a5f5a1e9139693bb211cd8"
+  },
+  "cases": [
+    {
+      "id": "claude-1",
+      "provider": "claude",
+      "branch": "Canonical / scoped / spend",
+      "notes": [
+        "Fable is source-supported temporary promo, not a timeless guarantee. Usage credits uses major currency used, cap nullable; unlimited cap has no percent/meter."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/claude/limits.js",
+          "lines": [
+            427,
+            588
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "claude",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "oauth",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Fable",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "metric": "spend",
+                  "label": "Usage credits",
+                  "used": 2.35,
+                  "limit": 20,
+                  "remaining": null,
+                  "usedPercent": 11.75,
+                  "remainingPercent": 88.25,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": {
+                "availableCount": 2,
+                "nextExpiresAt": "2026-11-01T00:00:00.000Z",
+                "expirations": [
+                  "2026-11-01T00:00:00.000Z"
+                ],
+                "grants": [
+                  {
+                    "id": "synthetic-grant",
+                    "label": "Synthetic reset",
+                    "resetsLeft": 2,
+                    "resetsTotal": 3,
+                    "startsAt": "2026-10-25T00:00:00.000Z",
+                    "endsAt": "2026-11-01T00:00:00.000Z",
+                    "clears": [
+                      "five_hour",
+                      "seven_day"
+                    ],
+                    "usableNow": false,
+                    "useRequiresLimit": true,
+                    "paused": true
+                  }
+                ]
+              },
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "claude-2",
+      "provider": "claude",
+      "branch": "Web prepaid / unlimited spend",
+      "notes": [
+        "Prepaid Balance has no denominator; do not infer a meter from monthly spend."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/claude/limits.js",
+          "lines": [
+            482,
+            510
+          ]
+        },
+        {
+          "path": "shared/providers/claude/limits.js",
+          "lines": [
+            1240,
+            1267
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "claude",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "spend",
+                  "label": "Usage credits",
+                  "used": 3.5,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": false
+                },
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 42,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 42,
+                "currency": "USD",
+                "todaySpend": null,
+                "weekSpend": null,
+                "monthSpend": null,
+                "allTimeSpend": null,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "codex-1",
+      "provider": "codex",
+      "branch": "Duration classes / additional named bucket",
+      "notes": [
+        "Primary/secondary classify by actual duration. This spans variants; no claim one account has four canonical windows. Preserve limitId/additional. Reset coupons independent of quota."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/codex/limits.js",
+          "lines": [
+            87,
+            127
+          ]
+        },
+        {
+          "path": "shared/providers/codex/limits.js",
+          "lines": [
+            525,
+            556
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "codex",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "rpc",
+              "sourceDetail": "app",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "limitId": "codex",
+                  "label": "",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "daily",
+                  "limitId": "codex",
+                  "label": "",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 1440,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "limitId": "codex",
+                  "label": "",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "limitId": "codex",
+                  "label": "Monthly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 43200,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "session",
+                  "limitId": "model-cap",
+                  "additional": true,
+                  "label": "Synthetic model bucket",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "limitId": "model-cap",
+                  "additional": true,
+                  "label": "Synthetic model bucket",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": {
+                "availableCount": 1,
+                "nextExpiresAt": "2026-11-01T00:00:00.000Z",
+                "expirations": [
+                  "2026-11-01T00:00:00.000Z"
+                ]
+              },
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "opencode-1",
+      "provider": "opencode",
+      "branch": "Go mixed provenance / Zen balance",
+      "notes": [
+        "API/web Go has used/limit null; local estimates have raw USD costs but no currency marker. Each window source=web/local; balanceUsd legacy alias is USD. Go API preferred over web/local."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/opencode/goApi.js",
+          "lines": [
+            159,
+            187
+          ]
+        },
+        {
+          "path": "shared/providers/opencode/goLimits.js",
+          "lines": [
+            146,
+            177
+          ]
+        },
+        {
+          "path": "shared/providers/opencode/limits.js",
+          "lines": [
+            70,
+            88
+          ]
+        },
+        {
+          "path": "shared/providers/opencode/limits.js",
+          "lines": [
+            217,
+            255
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "opencode",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "local",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "source": "web",
+                  "label": "",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "source": "local",
+                  "label": "",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "source": "local",
+                  "label": "",
+                  "used": 12,
+                  "limit": 60,
+                  "remaining": null,
+                  "usedPercent": 20,
+                  "remainingPercent": 80,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 44640,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "source": "web",
+                  "label": "Balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 42,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": 42,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cursor-1",
+      "provider": "cursor",
+      "branch": "Legacy branches",
+      "notes": [
+        "Requests / model pools / Overall are alternative branches, combined for display coverage. Team pool has USD raw costs without currency marker. On-demand may have nullable cap and always showMeter=false."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/cursor/limits.js",
+          "lines": [
+            100,
+            137
+          ]
+        },
+        {
+          "path": "shared/providers/cursor/limits.js",
+          "lines": [
+            170,
+            247
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "cursor",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "label": "Requests",
+                  "used": 120,
+                  "limit": 500,
+                  "remaining": 380,
+                  "usedPercent": 24,
+                  "remainingPercent": 76,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Cursor Models",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Other Models",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Grok Bot",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Overall",
+                  "used": 4,
+                  "limit": 20,
+                  "remaining": 16,
+                  "usedPercent": 20,
+                  "remainingPercent": 80,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Team pool",
+                  "used": 20,
+                  "limit": 100,
+                  "remaining": 80,
+                  "usedPercent": 20,
+                  "remainingPercent": 80,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "Shared team usage pool.",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "metric": "spend",
+                  "label": "On-demand spend",
+                  "used": 12.4,
+                  "limit": 20,
+                  "remaining": 7.6,
+                  "usedPercent": 62,
+                  "remainingPercent": 38,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cursor-2",
+      "provider": "cursor",
+      "branch": "Unified",
+      "notes": [
+        "Included usage becomes billing only when explicit monthly. Unified omits separate Grok/on-demand. Prepaid is positive USD amount with no meter."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/cursor/limits.js",
+          "lines": [
+            70,
+            97
+          ]
+        },
+        {
+          "path": "shared/providers/cursor/limits.js",
+          "lines": [
+            180,
+            247
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "cursor",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "weekly",
+                  "label": "Included usage",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Prepaid balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 42,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "antigravity-1",
+      "provider": "antigravity",
+      "branch": "Grouped / disabled",
+      "notes": [
+        "Dynamic group names normalize Gemini / Claude/GPT; unknown groups retain name. Disabled/null fraction is not zero. Legacy pools use weekly kind with dynamic model name and null duration."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/antigravity/limits.js",
+          "lines": [
+            47,
+            87
+          ]
+        },
+        {
+          "path": "shared/providers/antigravity/probe.js",
+          "lines": [
+            459,
+            512
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "antigravity",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "oauth",
+              "sourceDetail": "ide",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "Gemini 5-hour",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Gemini weekly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "session",
+                  "label": "Claude/GPT 5-hour",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Claude/GPT weekly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "Synthetic unavailable detail",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "antigravity-2",
+      "provider": "antigravity",
+      "branch": "Legacy model pool",
+      "notes": [
+        "Legacy snapshot.pools preserve dynamic name and lack known duration."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/antigravity/limits.js",
+          "lines": [
+            64,
+            73
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "antigravity",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "rpc",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "weekly",
+                  "label": "Synthetic model pool",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Synthetic disabled model",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cline-1",
+      "provider": "cline",
+      "branch": "Plan / balance / spend",
+      "notes": [
+        "Credits points and USD spend are different units. Credit upstream scaled /1e6; paid spend /1e8. Missing plan percentage omits window; planless credit-only valid."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/cline/limits.js",
+          "lines": [
+            117,
+            126
+          ]
+        },
+        {
+          "path": "shared/providers/cline/limits.js",
+          "lines": [
+            242,
+            311
+          ]
+        },
+        {
+          "path": "shared/providers/cline/limits.js",
+          "lines": [
+            365,
+            444
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "cline",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Monthly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Credits",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 0.5,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "CREDITS",
+                  "showMeter": false
+                },
+                {
+                  "kind": "billing",
+                  "metric": "spend",
+                  "label": "Usage credits",
+                  "used": 2.3,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "factory-1",
+      "provider": "factory",
+      "branch": "Token-rate standard/Core",
+      "notes": [
+        "Core is an additional pool. extraUsageBalanceCents /100 USD; core synthesizes Balance credits window when balance supplied."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/factory/limits.js",
+          "lines": [
+            66,
+            124
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "factory",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "limitId": "factory-5h",
+                  "label": "5-hour",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "session",
+                  "limitId": "factory-core-5h",
+                  "additional": true,
+                  "label": "Core 5-hour",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "limitId": "factory-weekly",
+                  "label": "Weekly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "limitId": "factory-core-weekly",
+                  "additional": true,
+                  "label": "Core Weekly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "limitId": "factory-monthly",
+                  "label": "Monthly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "limitId": "factory-core-monthly",
+                  "additional": true,
+                  "label": "Core Monthly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 42,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 42,
+                "currency": "USD",
+                "todaySpend": null,
+                "weekSpend": null,
+                "monthSpend": null,
+                "allTimeSpend": null,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "factory-2",
+      "provider": "factory",
+      "branch": "Legacy monthly pools",
+      "notes": [
+        "Legacy token units; reliable used/allowance optional, no currency."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/factory/limits.js",
+          "lines": [
+            127,
+            170
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "factory",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "limitId": "factory-standard",
+                  "label": "Standard",
+                  "used": 10,
+                  "limit": 100,
+                  "remaining": null,
+                  "usedPercent": 10,
+                  "remainingPercent": 90,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "limitId": "factory-premium",
+                  "label": "Premium",
+                  "used": 50,
+                  "limit": 200,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kimi-1",
+      "provider": "kimi",
+      "branch": "Code/member merged",
+      "notes": [
+        "Top-level usage label can be dynamic. Monthly shared total; Code subset only detail, raw composition may exceed clamped meter 100%. Raw counters reduced to percentages."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/kimi/limits.js",
+          "lines": [
+            214,
+            314
+          ]
+        },
+        {
+          "path": "shared/providers/kimi/limits.js",
+          "lines": [
+            386,
+            416
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "kimi",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "5-hour",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Weekly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Monthly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 100,
+                  "remainingPercent": 0,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "Kimi 15% · Code 120%",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "grok-1",
+      "provider": "grok",
+      "branch": "Billing periods",
+      "notes": [
+        "Alternative periods all retain billing kind; label reflects actual period. Only usedPercent crosses mapper, raw money does not."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/grok/limits.js",
+          "lines": [
+            169,
+            246
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "grok",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "label": "Weekly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Monthly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 43200,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Billing",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 20160,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "copilot-1",
+      "provider": "copilot",
+      "branch": "Premium / Chat overage",
+      "notes": [
+        "Used% clamped by core; overage survives resetDescription. Raw entitlement/counts not projected."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/copilot/limits.js",
+          "lines": [
+            164,
+            215
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "copilot",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "label": "Premium",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 100,
+                  "remainingPercent": 0,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "140% used",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Chat",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 0,
+                  "remainingPercent": 100,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "copilot-2",
+      "provider": "copilot",
+      "branch": "Unlimited snapshot",
+      "notes": [
+        "Unlimited not an explicit shared property: only absent reset / percentage. Do not invent unlimited marker from raw upstream metadata that does not cross mapper."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/copilot/limits.js",
+          "lines": [
+            197,
+            205
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "copilot",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "label": "Chat",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 0,
+                  "remainingPercent": 100,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "zed-1",
+      "provider": "zed",
+      "branch": "Spend / count",
+      "notes": [
+        "Token Spend is money even without metric=spend. Predictions are counts. Source-specific limitId determines units."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/zed/limits.js",
+          "lines": [
+            101,
+            173
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "zed",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "limitId": "zed.token-spend",
+                  "label": "Token Spend",
+                  "used": 2.5,
+                  "limit": 10,
+                  "remaining": 7.5,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "limitId": "zed.edit-predictions",
+                  "label": "Edit Predictions",
+                  "used": 120,
+                  "limit": 500,
+                  "remaining": 380,
+                  "usedPercent": 24,
+                  "remainingPercent": 76,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "zed-2",
+      "provider": "zed",
+      "branch": "Unlimited predictions",
+      "notes": [
+        "Explicit null input limit means unlimited; missing limit property omits window."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/zed/limits.js",
+          "lines": [
+            101,
+            113
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "zed",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "limitId": "zed.edit-predictions",
+                  "label": "Edit Predictions",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "Unlimited",
+                  "currency": null,
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "commandcode-1",
+      "provider": "commandcode",
+      "branch": "Rolling / monthly / purchased",
+      "notes": [
+        "Rolling costs are USD but currency absent; upstream only shows rolling percentages. Trusted monthly allowance corroborated by rolling caps. Top-up never expires. Monthly percentLeads=true upstream."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/commandcode/limits.js",
+          "lines": [
+            239,
+            274
+          ]
+        },
+        {
+          "path": "shared/providers/commandcode/limits.js",
+          "lines": [
+            337,
+            393
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "commandcode",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "",
+                  "used": 1,
+                  "limit": 14,
+                  "remaining": 13,
+                  "usedPercent": 7.142857142857142,
+                  "remainingPercent": 92.857,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "",
+                  "used": 10,
+                  "limit": 35,
+                  "remaining": 25,
+                  "usedPercent": 28.57142857142857,
+                  "remainingPercent": 71.429,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Monthly",
+                  "used": 22.58,
+                  "limit": 70,
+                  "remaining": 47.42,
+                  "usedPercent": 32.25714285714286,
+                  "remainingPercent": 67.743,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Top-up",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 10,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "commandcode-2",
+      "provider": "commandcode",
+      "branch": "Unknown allowance",
+      "notes": [
+        "Null limit means unknown denominator; amount remains valid."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/commandcode/limits.js",
+          "lines": [
+            356,
+            393
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "commandcode",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Monthly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 47.42,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "mimo-1",
+      "provider": "mimo",
+      "branch": "Console plan/wallet",
+      "notes": [
+        "Plan and wallet coexist. gift/cash split, observed spend/tracking and plan fallback fields matter. Currency read from upstream, not inferred."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/mimo/limits.js",
+          "lines": [
+            127,
+            134
+          ]
+        },
+        {
+          "path": "shared/providers/mimo/limits.js",
+          "lines": [
+            314,
+            369
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "mimo",
+              "accountKey": "",
+              "accountLabel": "Console",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "managed",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "label": "Token Plan",
+                  "used": 20,
+                  "limit": 100,
+                  "remaining": 80,
+                  "usedPercent": 20,
+                  "remainingPercent": 80,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 50,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "CNY",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 50,
+                "currency": "CNY",
+                "todaySpend": 1,
+                "weekSpend": 3,
+                "monthSpend": 8,
+                "allTimeSpend": 20,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": "2026-10-25T00:00:00.000Z",
+                "monthSinceTracking": true,
+                "giftBalance": 10,
+                "cashBalance": 40,
+                "planUsed": 20,
+                "planLimit": 100,
+                "planPercent": 20,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "mimo-2",
+      "provider": "mimo",
+      "branch": "Desktop Membership",
+      "notes": [
+        "Separate product row with same provider; intentionally no weekly duration. renewalMode is billing cadence, not quota."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/mimo/membership.js",
+          "lines": [
+            141,
+            150
+          ]
+        },
+        {
+          "path": "shared/providers/mimo/limits.js",
+          "lines": [
+            93,
+            96
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "mimo",
+              "accountKey": "",
+              "accountLabel": "Desktop Membership",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "local",
+              "sourceDetail": "app",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "weekly",
+                  "label": "",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "mimo-3",
+      "provider": "mimo",
+      "branch": "Expired Console plan",
+      "notes": [
+        "Expired plan not active quota; balance.planStatus persists independently of windows."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/mimo/limits.js",
+          "lines": [
+            314,
+            369
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "mimo",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 50,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "CNY",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 50,
+                "currency": "CNY",
+                "todaySpend": null,
+                "weekSpend": null,
+                "monthSpend": null,
+                "allTimeSpend": null,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": "expired",
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "zai-1",
+      "provider": "zai",
+      "branch": "Coding / MCP / cash",
+      "notes": [
+        "MCP source minute marker is misleading and discarded. Cash CN=CNY/global=USD; observed cumulative-spend deltas qualified by trackingSince."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/zai/limits.js",
+          "lines": [
+            181,
+            263
+          ]
+        },
+        {
+          "path": "shared/providers/zai/limits.js",
+          "lines": [
+            335,
+            374
+          ]
+        },
+        {
+          "path": "shared/providers/zai/limits.js",
+          "lines": [
+            519,
+            541
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "zai",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "5-hour",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Weekly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "MCP",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 80,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "Monthly",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 42,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "CNY",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 42,
+                "currency": "CNY",
+                "todaySpend": 1,
+                "weekSpend": 2,
+                "monthSpend": 3,
+                "allTimeSpend": 5,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": "2026-10-25T00:00:00.000Z",
+                "monthSinceTracking": true,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": "bigmodel-cn"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "zai-2",
+      "provider": "zai",
+      "branch": "ZCode model buckets",
+      "notes": [
+        "Daily/one-time pools aggregate by model. Earliest timestamp can replenish, expire or both; preserve boundaryKind, dynamic label and limitId."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/zai/limits.js",
+          "lines": [
+            673,
+            710
+          ]
+        },
+        {
+          "path": "shared/providers/zai/limits.js",
+          "lines": [
+            757,
+            824
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "zai",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "daily",
+                  "limitId": "zcode-daily",
+                  "boundaryKind": "reset",
+                  "label": "Synthetic daily",
+                  "used": 20,
+                  "limit": 100,
+                  "remaining": 80,
+                  "usedPercent": 20,
+                  "remainingPercent": 80,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 1440,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "limitId": "zcode-grant",
+                  "boundaryKind": "expiry",
+                  "label": "Synthetic one-time",
+                  "used": 20,
+                  "limit": 100,
+                  "remaining": 80,
+                  "usedPercent": 20,
+                  "remainingPercent": 80,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "limitId": "zcode-model:synthetic",
+                  "boundaryKind": "mixed",
+                  "label": "Synthetic aggregate",
+                  "used": 40,
+                  "limit": 200,
+                  "remaining": 160,
+                  "usedPercent": 20,
+                  "remainingPercent": 80,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "zaiteam-1",
+      "provider": "zaiteam",
+      "branch": "Team coding quotas",
+      "notes": [
+        "Uses parseZaiUsage, fixed bigmodel-cn. No team cash or ZCode collection."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/zaiteam/limits.js",
+          "lines": [
+            68,
+            99
+          ]
+        },
+        {
+          "path": "shared/providers/zai/limits.js",
+          "lines": [
+            181,
+            263
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "zaiteam",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "5-hour",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Weekly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "MCP",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 80,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "Monthly",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": "bigmodel-cn"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "kiro-1",
+      "provider": "kiro",
+      "branch": "Credits / Bonus / Overage",
+      "notes": [
+        "Credits and Bonus are counts. Overage used=extra credits; remaining=estimated USD COST, not remaining balance. No metric/currency, provider-specific semantics required."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/kiro/limits.js",
+          "lines": [
+            377,
+            424
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "kiro",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "cli",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "boundaryKind": "reset",
+                  "label": "Credits",
+                  "used": 25,
+                  "limit": 100,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "boundaryKind": "expiry",
+                  "label": "Bonus",
+                  "used": 10,
+                  "limit": 50,
+                  "remaining": null,
+                  "usedPercent": 20,
+                  "remainingPercent": 80,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Overage",
+                  "used": 12.5,
+                  "limit": null,
+                  "remaining": 3.2,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "workbuddy-1",
+      "provider": "workbuddy",
+      "branch": "Personal credits",
+      "notes": [
+        "Resources expire separately; aggregate has no common reset. Partial malformed active aggregate rejected."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/workbuddy/limits.js",
+          "lines": [
+            165,
+            207
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "workbuddy",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "local",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Credits",
+                  "used": 320,
+                  "limit": 1000,
+                  "remaining": 680,
+                  "usedPercent": 32,
+                  "remainingPercent": 68,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "CREDITS",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 680,
+                "currency": "CREDITS",
+                "todaySpend": null,
+                "weekSpend": null,
+                "monthSpend": null,
+                "allTimeSpend": null,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "workbuddy-2",
+      "provider": "workbuddy",
+      "branch": "Enterprise unlimited",
+      "notes": [
+        "limitNum=-1 means unlimited; limit/remaining null with meaningful used."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/workbuddy/limits.js",
+          "lines": [
+            220,
+            279
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "workbuddy",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "local",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Credits",
+                  "used": 32,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "unlimited",
+                  "currency": "CREDITS",
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": null,
+                "currency": "CREDITS",
+                "todaySpend": null,
+                "weekSpend": null,
+                "monthSpend": null,
+                "allTimeSpend": null,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "qoder-1",
+      "provider": "qoder",
+      "branch": "Aggregated credits",
+      "notes": [
+        "total/shared quotas summed. Parser unit is not copied to window; raw count units documented by upstream windowText."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/qoder/limits.js",
+          "lines": [
+            117,
+            163
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "qoder",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "label": "Credits",
+                  "used": 120,
+                  "limit": 500,
+                  "remaining": 380,
+                  "usedPercent": 24,
+                  "remainingPercent": 76,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "deepseek-1",
+      "provider": "deepseek",
+      "branch": "Balance and observed spend",
+      "notes": [
+        "Single funded currency selected; no native rate windows. Spend derives sampled paid-balance changes; trackingSince/monthSinceTracking qualify partial periods."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/deepseek/limits.js",
+          "lines": [
+            64,
+            101
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "deepseek",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 42,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "CNY",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 42,
+                "currency": "CNY",
+                "todaySpend": 0,
+                "weekSpend": 1.2,
+                "monthSpend": 2.3,
+                "allTimeSpend": 5,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": "2026-10-25T00:00:00.000Z",
+                "monthSinceTracking": true,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "devin-1",
+      "provider": "devin",
+      "branch": "Daily / weekly / extra balance",
+      "notes": [
+        "Daily/weekly can independently hide/absent; overage balance valid standalone. Cents normalized USD."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/devin/limits.js",
+          "lines": [
+            253,
+            285
+          ]
+        },
+        {
+          "path": "shared/providers/devin/limits.js",
+          "lines": [
+            333,
+            361
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "devin",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "daily",
+                  "label": "Daily",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 1440,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Weekly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Extra usage balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 12,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 12,
+                "currency": "USD",
+                "todaySpend": null,
+                "weekSpend": null,
+                "monthSpend": null,
+                "allTimeSpend": null,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "minimax-1",
+      "provider": "minimax",
+      "branch": "Token plan",
+      "notes": [
+        "Only general model bucket. Source remaining percentages inverted. status=3 placeholder suppressed. API/legacy endpoint same normalized windows."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/minimax/limits.js",
+          "lines": [
+            123,
+            192
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "minimax",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "5h",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Weekly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": "cn"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "minimax-2",
+      "provider": "minimax",
+      "branch": "API balance",
+      "notes": [
+        "Explicit API mode uses available_amount; CN=CNY/EN=USD. Missing value not zero."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/minimax/limits.js",
+          "lines": [
+            227,
+            241
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "minimax",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 3.2,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "CNY",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": "cn"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "typesafe-1",
+      "provider": "typesafe",
+      "branch": "USD grants / estimated usage",
+      "notes": [
+        "Grant expiry not billing reset. monthSpend estimated from rates; tranches and usageSummary private, earliest window expiry publicly retained."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/typesafe/limits.js",
+          "lines": [
+            267,
+            290
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "typesafe",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "boundaryKind": "expiry",
+                  "label": "Balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 42,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 42,
+                "currency": "USD",
+                "todaySpend": null,
+                "weekSpend": null,
+                "monthSpend": 5,
+                "allTimeSpend": null,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": "",
+                "tranches": [
+                  {
+                    "amount": 10,
+                    "currency": "USD",
+                    "expiresAt": "2026-11-01T00:00:00.000Z"
+                  },
+                  {
+                    "amount": 32,
+                    "currency": "USD",
+                    "expiresAt": null
+                  }
+                ]
+              },
+              "usageSummary": {
+                "period": "month",
+                "requests": 3,
+                "todayTokens": 100,
+                "weekTokens": 200,
+                "inputTokens": 250,
+                "outputTokens": 50,
+                "cacheReadTokens": null,
+                "cacheCreationTokens": null,
+                "totalTokens": 300,
+                "standardCost": 5,
+                "actualCost": null,
+                "averageDurationMs": null
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "openrouter-1",
+      "provider": "openrouter",
+      "branch": "Key periods / account credits",
+      "notes": [
+        "Key periods alternatives. Daily kind=session per source. USD amounts omit window currency; balance supplies USD. BYOK accounting flag reduced upstream."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/openrouter/limits.js",
+          "lines": [
+            65,
+            109
+          ]
+        },
+        {
+          "path": "shared/providers/openrouter/limits.js",
+          "lines": [
+            154,
+            185
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "openrouter",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "Daily limit",
+                  "used": 3,
+                  "limit": 10,
+                  "remaining": 7,
+                  "usedPercent": 30,
+                  "remainingPercent": 70,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Weekly limit",
+                  "used": 3,
+                  "limit": 10,
+                  "remaining": 7,
+                  "usedPercent": 30,
+                  "remainingPercent": 70,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Monthly limit",
+                  "used": 3,
+                  "limit": 10,
+                  "remaining": 7,
+                  "usedPercent": 30,
+                  "remainingPercent": 70,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "API key limit",
+                  "used": 3,
+                  "limit": 10,
+                  "remaining": 7,
+                  "usedPercent": 30,
+                  "remainingPercent": 70,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Credits",
+                  "used": 8,
+                  "limit": 50,
+                  "remaining": 42,
+                  "usedPercent": 16,
+                  "remainingPercent": 84,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 42,
+                "currency": "USD",
+                "todaySpend": 1,
+                "weekSpend": 2,
+                "monthSpend": 3,
+                "allTimeSpend": 8,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "volcengine-1",
+      "provider": "volcengine",
+      "branch": "Coding plan",
+      "notes": [
+        "Percent is used percentage; plan/update projected separately."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/volcengine/limits.js",
+          "lines": [
+            119,
+            187
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "volcengine",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "5-hour",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Weekly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Monthly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 43200,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "volcengine-2",
+      "provider": "volcengine",
+      "branch": "Ark headers",
+      "notes": [
+        "Headers have request counts, duration absent."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/volcengine/limits.js",
+          "lines": [
+            200,
+            217
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "volcengine",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "Requests",
+                  "used": 20,
+                  "limit": 100,
+                  "remaining": 80,
+                  "usedPercent": 20,
+                  "remainingPercent": 80,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "volcengine-3",
+      "provider": "volcengine",
+      "branch": "Ark token fallback",
+      "notes": [
+        "Label Requests but used=usage.total_tokens. Shared schema no unit discriminator; do not invent percentage or unit from label."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/volcengine/limits.js",
+          "lines": [
+            219,
+            235
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "volcengine",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "Requests",
+                  "used": 1234,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "ollama-1",
+      "provider": "ollama",
+      "branch": "Cloud hourly/session weekly",
+      "notes": [
+        "session may be hourly 60 OR session 300; duration disambiguates. Empty wire labels."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/ollama/limits.js",
+          "lines": [
+            110,
+            154
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "ollama",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 60,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "trae-1",
+      "provider": "trae",
+      "branch": "Aggregated entitlement credits",
+      "notes": [
+        "Active pack aggregate has no common reset. Raw used overage retained even if percent clamps. Malformed active pack rejects aggregate."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/trae/limits.js",
+          "lines": [
+            75,
+            118
+          ]
+        },
+        {
+          "path": "shared/providers/trae/limits.js",
+          "lines": [
+            173,
+            185
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "trae",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Credits",
+                  "used": 320,
+                  "limit": 1000,
+                  "remaining": 680,
+                  "usedPercent": 32,
+                  "remainingPercent": 68,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "CREDITS",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 680,
+                "currency": "CREDITS",
+                "todaySpend": null,
+                "weekSpend": null,
+                "monthSpend": null,
+                "allTimeSpend": null,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": "cn"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "alibaba-1",
+      "provider": "alibaba",
+      "branch": "Personal periods",
+      "notes": [
+        "Optional quota config gives limit only; percent remains meaningful with null denominator. Monthly-only plan valid."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/alibaba/limits.js",
+          "lines": [
+            622,
+            656
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "alibaba",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "5-hour",
+                  "used": null,
+                  "limit": 100,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Weekly",
+                  "used": null,
+                  "limit": 1000,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "",
+                  "used": null,
+                  "limit": 3000,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 43200,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "alibaba-2",
+      "provider": "alibaba",
+      "branch": "Team pool",
+      "notes": [
+        "Blank label defaults Monthly. ok windows=[] valid with no active subscription."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/alibaba/limits.js",
+          "lines": [
+            496,
+            551
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "alibaba",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "label": "",
+                  "used": 20,
+                  "limit": 100,
+                  "remaining": 80,
+                  "usedPercent": 20,
+                  "remainingPercent": 80,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "stepfun-1",
+      "provider": "stepfun",
+      "branch": "Rolling plan",
+      "notes": [
+        "Both fractions/resets required; invalid yields unavailable."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/stepfun/limits.js",
+          "lines": [
+            50,
+            93
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "stepfun",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "5-hour",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 300,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "weekly",
+                  "label": "Weekly",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 10080,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "stepfun-2",
+      "provider": "stepfun",
+      "branch": "Credit family",
+      "notes": [
+        "Buckets reduced to percentage; no metric=credits, raw amounts or currency. Optional reset permits 30d duration; absent reset leaves duration absent."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/stepfun/limits.js",
+          "lines": [
+            50,
+            83
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "stepfun",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "label": "Credit",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 43200,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "notion-1",
+      "provider": "notion",
+      "branch": "Rolling six hours / monthly",
+      "notes": [
+        "basic_ai_credits per_user counts. Rolling SIX hours; no metric/currency. Missing reset unknown."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/notion/limits.js",
+          "lines": [
+            132,
+            162
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "notion",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "web",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "session",
+                  "label": "Rolling",
+                  "used": 25,
+                  "limit": 100,
+                  "remaining": 75,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": 360,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                },
+                {
+                  "kind": "billing",
+                  "label": "Monthly",
+                  "used": 50,
+                  "limit": 200,
+                  "remaining": 150,
+                  "usedPercent": 25,
+                  "remainingPercent": 75,
+                  "resetsAt": "2026-11-01T00:00:00.000Z",
+                  "windowMinutes": null,
+                  "resetDescription": "Monthly",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "thirdparty-1",
+      "provider": "thirdparty",
+      "branch": "NewAPI account/token",
+      "notes": [
+        "NewAPI units normalized USD. Token expiry carried in balance.expiresAt, not window reset; group private."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/thirdparty/limits.js",
+          "lines": [
+            264,
+            357
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "thirdparty",
+              "adapterId": "newapi-account",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Balance",
+                  "used": 8,
+                  "limit": 50,
+                  "remaining": 42,
+                  "usedPercent": 16,
+                  "remainingPercent": 84,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 42,
+                "currency": "USD",
+                "todaySpend": 1,
+                "weekSpend": 2,
+                "monthSpend": 3,
+                "allTimeSpend": 8,
+                "requestCount": 123,
+                "quotaGroup": "synthetic-group",
+                "expiresAt": "2026-11-01T00:00:00.000Z",
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "thirdparty-2",
+      "provider": "thirdparty",
+      "branch": "Unlimited",
+      "notes": [
+        "Unlimited amount=null differs zero; historical spend still meaningful."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/thirdparty/limits.js",
+          "lines": [
+            264,
+            324
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "thirdparty",
+              "adapterId": "newapi-token",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Token quota",
+                  "used": null,
+                  "limit": null,
+                  "remaining": null,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "Unlimited",
+                  "currency": null,
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": null,
+                "currency": "USD",
+                "todaySpend": null,
+                "weekSpend": null,
+                "monthSpend": null,
+                "allTimeSpend": 8,
+                "requestCount": 123,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "thirdparty-3",
+      "provider": "thirdparty",
+      "branch": "Sub2API",
+      "notes": [
+        "Monthly private usageSummary has caches, cost, actual cost, latency."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/thirdparty/limits.js",
+          "lines": [
+            366,
+            389
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "thirdparty",
+              "adapterId": "sub2api",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 42,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 42,
+                "currency": "USD",
+                "todaySpend": null,
+                "weekSpend": null,
+                "monthSpend": null,
+                "allTimeSpend": null,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "usageSummary": {
+                "period": "month",
+                "requests": 4,
+                "todayTokens": null,
+                "weekTokens": null,
+                "inputTokens": 100,
+                "outputTokens": 20,
+                "cacheReadTokens": 30,
+                "cacheCreationTokens": 40,
+                "totalTokens": 190,
+                "standardCost": 2,
+                "actualCost": 1.5,
+                "averageDurationMs": 250
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "thirdparty-4",
+      "provider": "thirdparty",
+      "branch": "Custom zero balance",
+      "notes": [
+        "Custom paths/divisor normalize USD; missing used/total stay null. Zero valid exhausted balance. Raw credential/URL/path config excluded."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/thirdparty/limits.js",
+          "lines": [
+            392,
+            407
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "thirdparty",
+              "adapterId": "custom",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Balance",
+                  "used": null,
+                  "limit": null,
+                  "remaining": 0,
+                  "usedPercent": null,
+                  "remainingPercent": null,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": "USD",
+                  "showMeter": false
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 0,
+                "currency": "USD",
+                "todaySpend": null,
+                "weekSpend": null,
+                "monthSpend": null,
+                "allTimeSpend": null,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": null,
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "thirdparty-5",
+      "provider": "thirdparty",
+      "branch": "NewAPI token quota",
+      "notes": [
+        "Token adapter owns a separate key quota; expiry carried in balance metadata."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/thirdparty/limits.js",
+          "lines": [
+            264,
+            357
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "thirdparty",
+              "adapterId": "newapi-token",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "ok",
+              "source": "api",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [
+                {
+                  "kind": "billing",
+                  "metric": "credits",
+                  "label": "Token quota",
+                  "used": 8,
+                  "limit": 20,
+                  "remaining": 12,
+                  "usedPercent": 40,
+                  "remainingPercent": 60,
+                  "resetsAt": null,
+                  "windowMinutes": null,
+                  "resetDescription": "",
+                  "detail": "",
+                  "currency": null,
+                  "showMeter": true
+                }
+              ],
+              "balanceUsd": null,
+              "balance": {
+                "amount": 12,
+                "currency": "USD",
+                "todaySpend": null,
+                "weekSpend": null,
+                "monthSpend": null,
+                "allTimeSpend": 8,
+                "requestCount": null,
+                "quotaGroup": "",
+                "expiresAt": "2026-11-01T00:00:00.000Z",
+                "trackingSince": null,
+                "monthSinceTracking": false,
+                "giftBalance": null,
+                "cashBalance": null,
+                "planUsed": null,
+                "planLimit": null,
+                "planPercent": null,
+                "planStatus": null,
+                "todayTokenTotal": null,
+                "todayUsageDate": "",
+                "latestModelUsageDate": "",
+                "todayUsageBasis": "",
+                "snapshotDate": ""
+              },
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "antigravity-3",
+      "provider": "antigravity",
+      "branch": "Verification action",
+      "notes": [
+        "Action-required empty windows are not a zero quota or healthy empty account."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/antigravity/limits.js",
+          "lines": [
+            90,
+            104
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "antigravity",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "unauthorized",
+              "actionRequired": "accountVerification",
+              "source": "oauth",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "workbuddy-3",
+      "provider": "workbuddy",
+      "branch": "Encrypted app session action",
+      "notes": [
+        "Action-required empty windows are not a zero quota or healthy empty account."
+      ],
+      "sources": [
+        {
+          "path": "shared/providers/workbuddy/limits.js",
+          "lines": [
+            410,
+            424
+          ]
+        }
+      ],
+      "stats": {
+        "limits": {
+          "updatedAt": "2026-10-25T00:00:00.000Z",
+          "refreshMs": 300000,
+          "providers": [
+            {
+              "provider": "workbuddy",
+              "accountKey": "",
+              "accountLabel": "",
+              "planLabel": "",
+              "accountName": "",
+              "accountEmail": "",
+              "workspaceKind": "",
+              "status": "notConfigured",
+              "actionRequired": "appSessionEncrypted",
+              "source": "local",
+              "sourceDetail": "",
+              "updatedAt": "2026-10-25T00:00:00.000Z",
+              "windows": [],
+              "balanceUsd": null,
+              "balance": null,
+              "resetCredits": null,
+              "region": ""
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

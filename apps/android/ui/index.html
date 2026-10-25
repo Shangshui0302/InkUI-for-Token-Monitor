@@ -12,32 +12,36 @@
 <body>
   <main id="app">
     <header class="topbar">
-      <div class="identity"><strong class="brand"><span class="brand-symbol">Σ</span> <span class="brand-word">Token Monitor</span></strong><button id="status-toggle" class="status-button" type="button" aria-label="连接详情"><span id="connection">读取中</span><time id="last-time"></time></button></div>
-      <div class="period-buttons" aria-label="用量时段">
-        <button type="button" data-period="today" aria-pressed="true">日</button>
-        <button type="button" data-period="month">月</button>
-        <button type="button" data-period="allTime">累计</button>
+      <div class="identity"><strong class="brand"><span class="brand-symbol" aria-hidden="true">≋</span><span class="brand-word">Token Monitor</span></strong><button id="status-toggle" class="status-button icon-button" type="button" aria-label="Hub 连接详情" title="Hub 连接详情"><span id="hub-state-icon" aria-hidden="true"></span><span id="connection" class="sr-only">读取中</span><time id="last-time" class="sr-only"></time></button></div>
+      <div id="device-status" class="device-status" role="group" aria-label="设备状态">
+        <time id="device-time" title="设备时间">—:—</time>
+        <span id="device-network" role="img" aria-label="网络状态未知" title="网络状态未知"></span>
+        <span id="device-battery" role="img" aria-label="电量未知" title="电量未知"><span id="battery-symbol"></span><span id="battery-value">—</span></span>
       </div>
-      <div class="top-actions"><button id="refresh" type="button">刷新</button><button id="settings-open" type="button">设置</button></div>
+      <div class="top-actions"><button id="refresh" class="icon-button" type="button" data-icon="refresh" aria-label="刷新数据" title="刷新数据"></button><button id="fullscreen-toggle" class="icon-button" type="button" data-icon="expand" aria-label="进入全屏" title="进入全屏" aria-pressed="false"></button><button id="settings-open" class="icon-button" type="button" data-icon="settings" aria-label="设置" title="设置"></button></div>
     </header>
     <input id="period" type="hidden" value="today">
-    <nav id="navigation" aria-label="看板页面">
-      <button type="button" data-page="limits" aria-current="page">额度</button>
-      <button type="button" data-page="sessions">会话</button>
-      <button type="button" data-page="activity">活动</button>
-      <button type="button" data-page="details">明细</button>
-    </nav>
+    <div class="navigation-row"><nav id="navigation" aria-label="看板页面">
+      <button type="button" data-page="limits" aria-label="额度" aria-current="page"><span class="nav-index">01</span><span>额度</span></button>
+      <button type="button" data-page="sessions" aria-label="会话"><span class="nav-index">02</span><span>会话</span></button>
+      <button type="button" data-page="activity" aria-label="活动"><span class="nav-index">03</span><span>活动</span></button>
+      <button type="button" data-page="details" aria-label="明细"><span class="nav-index">04</span><span>明细</span></button>
+    </nav><div class="period-buttons" aria-label="用量时段">
+      <button type="button" data-period="today" aria-pressed="true">日</button>
+      <button type="button" data-period="month">月</button>
+      <button type="button" data-period="allTime">累计</button>
+    </div></div>
     <div id="dashboard"><p class="empty">正在读取…</p></div>
     <footer class="page-controls" aria-label="翻页">
-      <button id="page-prev" type="button" disabled>上页</button>
+      <button id="page-prev" type="button" data-icon="arrow-left" aria-label="上页" title="上页" disabled></button>
       <output id="page-position" aria-live="polite">1 / 1</output>
-      <button id="page-next" type="button" disabled>下页</button>
+      <button id="page-next" type="button" data-icon="arrow-right" aria-label="下页" title="下页" disabled></button>
     </footer>
   </main>
   <section id="settings" class="settings-screen" role="dialog" aria-modal="true" aria-label="设置" hidden>
-    <header class="settings-header"><strong>设置</strong><button id="settings-close" type="button">返回</button></header>
+    <header class="settings-header"><strong>设置</strong><button id="settings-close" class="icon-button" type="button" data-icon="arrow-left" aria-label="返回" title="返回"></button></header>
     <nav class="settings-nav" aria-label="设置页面">
-      <button type="button" data-setting="display">显示</button><button type="button" data-setting="refresh" aria-pressed="true">刷新</button><button type="button" data-setting="connection">连接</button><button type="button" data-setting="native">编辑</button><button type="button" data-setting="cache">缓存</button>
+      <button type="button" data-setting="display">显示</button><button type="button" data-setting="refresh" aria-pressed="true">数据</button><button type="button" data-setting="screen">屏幕</button><button type="button" data-setting="connection">连接</button><button type="button" data-setting="native">编辑</button><button type="button" data-setting="cache">缓存</button>
     </nav>
     <div class="settings-body">
       <section data-setting-pane="display" hidden>
@@ -46,6 +50,7 @@
         <div class="theme-preview"><span id="theme-caption">16 级灰度</span><div class="palette-strip" role="img" aria-label="从浅到深的16级色阶"><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span></div></div>
       </section>
       <section data-setting-pane="refresh"><p id="interval-current">每 60 秒</p><div class="settings-choices"><button type="button" data-interval="60" aria-pressed="true">60 秒</button><button type="button" data-interval="300">5 分钟</button><button type="button" data-interval="0">手动</button></div><input id="interval" type="hidden" value="60"></section>
+      <section data-setting-pane="screen" hidden><p id="screen-mode">由系统管理刷新</p><button id="screen-clear" type="button" disabled>清屏</button></section>
       <section data-setting-pane="connection" class="connection-details" hidden><div class="detail-copy"><p id="last-success"></p><p id="detail">正在连接</p></div><div class="setting-pager"><button id="detail-prev" type="button">上页</button><output id="detail-position"></output><button id="detail-next" type="button">下页</button></div></section>
       <section data-setting-pane="native" id="native-connection" hidden>
         <div class="connection-sources"><button type="button" data-connection-source="hub" aria-pressed="true">Hub</button><button type="button" data-connection-source="archive">归档</button></div>

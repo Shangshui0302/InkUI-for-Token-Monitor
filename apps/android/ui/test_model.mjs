@@ -101,6 +101,20 @@ test('blank labels fall back to the window kind while explicit labels survive', 
   ]);
 });
 
+test('public plan labels survive projection without persisting arbitrary subscription data', () => {
+  const input = stats([
+    provider({ plan: 'Pro 长套餐', planType: 'Team', subscriptionPlan: 'Annual', accountKey: 'private-key', subscription: { token: 'private-token' } }),
+    provider({ plan: { label: 'private nested data' }, planType: 99, subscriptionPlan: false })
+  ]);
+  const projected = projectStatsForCache(input);
+  assert.deepEqual(projected.limits.providers.map(({ plan, planType, subscriptionPlan }) => ({ plan, planType, subscriptionPlan })), [
+    { plan: 'Pro 长套餐', planType: 'Team', subscriptionPlan: 'Annual' },
+    { plan: null, planType: null, subscriptionPlan: null }
+  ]);
+  assert.equal(JSON.stringify(projected).includes('private'), false);
+  assert.deepEqual(projectStatsForCache(projected), projected);
+});
+
 test('priority preserves every account and the relative order of unknown providers', () => {
   const input = [
     provider({ provider: 'other-a', accountLabel: '其他甲' }),
@@ -114,4 +128,84 @@ test('priority preserves every account and the relative order of unknown provide
     '甲', '乙', '深度', '反重力', '其他甲', '其他乙'
   ]);
   assert.equal(normalizeStats(stats([provider({ source: 'other' })]))[0].source, '');
+});
+
+test('all 30 Hub providers have catalog display names and unknown providers remain usable', () => {
+  const catalog = {
+    claude: 'Claude', codex: 'Codex', opencode: 'OpenCode', cursor: 'Cursor', antigravity: 'Antigravity',
+    cline: 'Cline', factory: 'Factory Droid', kimi: 'Kimi', grok: 'Grok', copilot: 'GitHub Copilot',
+    zed: 'Zed', commandcode: 'Command Code', mimo: 'Xiaomi MiMo', zai: 'GLM', zaiteam: 'GLM Team',
+    kiro: 'Kiro', workbuddy: 'WorkBuddy', qoder: 'Qoder', deepseek: 'DeepSeek', devin: 'Devin',
+    minimax: 'Minimax', typesafe: 'TypeSafe', openrouter: 'OpenRouter', volcengine: 'Volcengine',
+    ollama: 'Ollama', trae: 'Trae CN', alibaba: 'Alibaba Cloud', stepfun: 'StepFun', notion: 'Notion AI',
+    thirdparty: 'Third-party APIs'
+  };
+  const result = normalizeStats(stats(Object.keys(catalog).map(id => provider({ provider: id }))));
+  assert.equal(result.length, 30);
+  for (const item of result) assert.equal(item.name, catalog[item.provider]);
+  assert.equal(normalizeStats(stats([provider({ provider: 'future-provider' })]))[0].name, 'future-provider');
+});
+
+test('complete typed quota details survive live projection and JSON round trip without credentials', () => {
+  const secret = { accountKey: 'PRIVATE-key', webAccountKey: 'PRIVATE-web', accountKeyAliases: ['PRIVATE-alias'],
+    token: 'PRIVATE-token', accessToken: 'PRIVATE-access', refreshToken: 'PRIVATE-refresh', apiKey: 'PRIVATE-api',
+    clientSecret: 'PRIVATE-secret', password: 'PRIVATE-password', authorization: 'PRIVATE-header',
+    cookie: 'PRIVATE-cookie', raw: { nested: 'PRIVATE-raw' }, sourceDeviceId: 'PRIVATE-device',
+    path: 'PRIVATE-path', env: { value: 'PRIVATE-env' } };
+  const input = stats([provider({
+    ...secret, provider: 'thirdparty', adapterId: 'new-api', accountLabel: '个人', accountName: '示例',
+    accountEmail: 'example@example.invalid', planLabel: 'Pro', workspaceKind: 'personal',
+    status: 'sourceRateLimited', source: 'web', sourceDetail: 'managed', actionRequired: 'accountVerification', region: 'cn-personal',
+    balanceUsd: 0,
+    balance: { ...secret, amount: 0, currency: 'CNY', todaySpend: 0, weekSpend: 1, monthSpend: 2,
+      allTimeSpend: 3, requestCount: 0, quotaGroup: '套餐组', expiresAt: null, trackingSince: '2026-10-01T00:00:00Z',
+      monthSinceTracking: false, giftBalance: 0, cashBalance: 0, planUsed: 0, planLimit: 100, planPercent: 0,
+      planStatus: 'active', todayTokenTotal: 0, todayUsageDate: '2026-10-25', latestModelUsageDate: '2026-10-24',
+      todayUsageBasis: 'provider', snapshotDate: '2026-10-25', tranches: [{ ...secret, amount: 0, currency: 'CNY', expiresAt: null }] },
+    resetCredits: { ...secret, availableCount: 0, nextExpiresAt: null, expirations: ['2026-10-31T00:00:00Z', secret],
+      grants: [{ ...secret, id: 'semantic-coupon', label: '补偿', resetsLeft: 0, resetsTotal: 1,
+        startsAt: null, endsAt: '2026-10-31T00:00:00Z', usableNow: false, useRequiresLimit: true, paused: false,
+        clears: ['weekly', secret] }] },
+    usageSummary: { ...secret, period: 'month', requests: 0, todayTokens: 0, weekTokens: 1, inputTokens: 2,
+      outputTokens: 3, cacheReadTokens: 4, cacheCreationTokens: 5, totalTokens: 14, standardCost: 0, actualCost: 0, averageDurationMs: 0 },
+    windows: [{ ...secret, kind: 'daily', label: '', source: 'local', metric: 'spend', limitId: 'semantic-limit',
+      boundaryKind: 'expiry', additional: false, used: 0, limit: 100, remaining: 100, usedPercent: 0,
+      remainingPercent: 100, windowMinutes: 1440, resetsAt: null, resetDescription: '月底', detail: '测试', currency: 'CNY', showMeter: false }]
+  })]);
+  input.limits.updatedAt = '2026-10-25T00:00:00Z'; input.limits.refreshMs = 300000;
+  const projected = projectStatsForCache(input);
+  const cached = JSON.parse(JSON.stringify(projected));
+  assert.equal(JSON.stringify(cached).includes('PRIVATE'), false);
+  assert.deepEqual(projectStatsForCache(cached), cached);
+  assert.deepEqual(normalizeStats(cached), normalizeStats(input));
+  assert.equal(cached.limits.updatedAt, input.limits.updatedAt);
+  assert.equal(cached.limits.refreshMs, 300000);
+  const row = normalizeStats(cached)[0];
+  assert.equal(row.provider, 'thirdparty'); assert.equal(row.statusCode, 'sourceRateLimited');
+  assert.equal(row.status, '采集受限'); assert.equal(row.source, 'web');
+  assert.equal(row.accountEmail, 'example@example.invalid'); assert.equal(row.planLabel, 'Pro');
+  assert.equal(row.balance.amount, 0); assert.equal(row.balance.monthSinceTracking, false);
+  assert.equal(row.balance.tranches[0].amount, 0);
+  assert.equal(row.resetCredits.grants[0].id, 'semantic-coupon');
+  assert.equal(row.resetCredits.grants[0].usableNow, false);
+  assert.deepEqual(row.resetCredits.grants[0].clears, ['weekly']);
+  assert.equal(row.usageSummary.actualCost, 0);
+  const window = row.windows[0];
+  assert.equal(window.label, '每日额度'); assert.equal(window.metric, 'spend'); assert.equal(window.used, 0);
+  assert.equal(window.limitId, 'semantic-limit'); assert.equal(window.boundaryKind, 'expiry');
+  assert.equal(window.showMeter, false); assert.equal(window.additional, false);
+  assert.equal(window.windowMinutes, 1440); assert.equal(window.resetDescription, '月底'); assert.equal(window.detail, '测试');
+});
+
+test('typed detail projection rejects arrays, nonfinite numbers and coercion without turning unknown into zero', () => {
+  const input = stats([provider({ balance: [], resetCredits: [], usageSummary: [],
+    windows: [{ kind: 'daily', used: '0', limit: Infinity, remaining: NaN, showMeter: 'false', additional: 0 }] })]);
+  const projected = projectStatsForCache(input);
+  const row = projected.limits.providers[0];
+  assert.equal(row.balance, null); assert.equal(row.resetCredits, null); assert.equal(row.usageSummary, null);
+  assert.equal(row.windows[0].used, null); assert.equal(row.windows[0].limit, null);
+  assert.equal(row.windows[0].remaining, null); assert.equal(row.windows[0].showMeter, null);
+  assert.equal(row.windows[0].additional, null);
+  assert.deepEqual(projectStatsForCache(projected), projected);
+  assert.equal(normalizeStats(projected)[0].windows[0].value, null);
 });

@@ -1,4 +1,4 @@
-:root { font-family: Arial, "Noto Sans CJK SC", sans-serif; font-size: 16px; color: var(--ink); background: var(--paper); --control-height: 36px; --app-height: 100vh; }
+:root { font-family: "Helvetica Neue", Arial, "Noto Sans CJK SC", sans-serif; font-size: 16px; color: var(--ink); background: var(--paper); --control-height: 36px; --app-height: 100vh; }
 * { box-sizing: border-box; animation: none !important; transition: none !important; box-shadow: none !important; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; }
 body { position: fixed; inset: 0; touch-action: none; -webkit-tap-highlight-color: transparent; }
@@ -7,35 +7,52 @@ button, input { font: inherit; color: var(--ink); background: var(--paper); }
 button { min-width: 0; min-height: var(--control-height); padding: 3px 10px; border: 1px solid var(--line); border-radius: 3px; font-weight: 500; line-height: 1.1; cursor: pointer; touch-action: none; }
 button:disabled { color: var(--muted); border-color: var(--soft-line); cursor: default; }
 button[aria-pressed="true"], button[aria-current="page"] { background: var(--accent-soft); color: var(--accent-ink); border-color: var(--accent); font-weight: 700; }
-button:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -3px; }
+button:focus-visible, input:focus { outline: 2px solid var(--accent); outline-offset: -3px; }
 input { border: 1px solid var(--line); border-radius: 3px; width: 100%; min-width: 0; min-height: var(--control-height); padding: 4px 6px; }
 p { margin: 0; }
-#app { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr) auto; width: 100%; height: var(--app-height); max-height: 100%; padding: 4px 8px; gap: 4px; overflow: hidden; }
-.topbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; }
-.identity { display: flex; gap: 12px; align-items: baseline; flex: 1; min-width: 0; }
-.brand { white-space: nowrap; font-size: 18px; letter-spacing: -.03em; font-weight: 700; }
-.brand-symbol { color: var(--accent); }
-.brand-word { letter-spacing: -.035em; }
-.status-button { border: 0; padding: 0; font-size: 12px; font-weight: 400; color: var(--muted); white-space: nowrap; }
-#last-time { margin-left: 6px; font-variant-numeric: tabular-nums; }
-.period-buttons, .top-actions { display: flex; gap: 4px; }
-.period-buttons button { min-width: 38px; background: var(--panel); }
-.period-buttons button[aria-pressed="true"] { background: var(--accent-soft); }
-.top-actions button { border-color: var(--soft-line); }
-#navigation { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; }
-#navigation button { padding-left: 0; padding-right: 0; border-color: var(--soft-line); background: var(--panel); }
-#navigation button[aria-current="page"] { background: var(--accent-soft); border-color: var(--accent); border-bottom-width: 3px; padding-bottom: 1px; }
-#dashboard { min-width: 0; min-height: 0; overflow: hidden; position: relative; }
-.page-controls { display: grid; grid-template-columns: minmax(60px,1fr) minmax(0,2fr) minmax(60px,1fr); align-items: center; gap: 8px; border-top: 1px solid var(--line); padding-top: 3px; }
-.page-controls output { text-align: center; font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.page-controls button { border: 0; padding: 3px 2px; }
-#page-prev { text-align: left; }
-#page-next { text-align: right; }
+
+.sr-only { position:absolute!important; width:1px!important; height:1px!important; padding:0!important; margin:-1px!important; overflow:hidden!important; clip:rect(0,0,0,0)!important; white-space:nowrap!important; border:0!important; }
+.icon { display:block; width:20px; height:20px; flex:0 0 auto; }
+.icon-button { display:flex; align-items:center; justify-content:center; width:32px; min-height:30px; padding:4px; border:0; border-radius:0; }
+#app { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto minmax(0,1fr) auto; width:100%; height:var(--app-height); max-height:100%; padding:8px 20px 4px; gap:6px; overflow:hidden; }
+.topbar { display:grid; grid-template-columns:minmax(0,1fr) auto auto; align-items:center; gap:12px; min-width:0; border-bottom:1px solid var(--ink); padding-bottom:4px; }
+.identity { display:flex; align-items:center; gap:8px; min-width:0; }
+.brand { display:flex; align-items:center; gap:7px; white-space:nowrap; font-size:17px; letter-spacing:-.045em; font-weight:700; }
+.brand-symbol { color:var(--accent); font-size:28px; line-height:.8; }
+.status-button { color:var(--muted); width:26px; min-height:28px; padding:4px; }
+.status-button .icon { width:17px; height:17px; }
+.status-button[data-state=online] { color:var(--accent-text,var(--ink)); }
+.status-button[data-state=error] { color:var(--ink); }
+.device-status { display:flex; align-items:center; justify-content:flex-end; gap:10px; font-size:12px; line-height:1; font-weight:600; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.device-status .icon { width:18px; height:18px; }
+#device-time { min-width:3em; }
+#device-network,#device-battery { display:flex; align-items:center; gap:3px; }
+#battery-symbol { position:relative; display:block; }
+#battery-symbol>.icon { width:24px; height:20px; }
+#battery-symbol>.charging-mark { position:absolute; right:-1px; top:0; width:10px; height:12px; color:var(--ink); fill:var(--paper); stroke-width:2; }
+#battery-value { min-width:2.7em; text-align:right; }
+.top-actions { display:flex; gap:1px; }
+.top-actions button[aria-pressed=true] { background:transparent; color:var(--ink); }
+.navigation-row { display:flex; align-items:center; gap:16px; border-bottom:1px solid var(--soft-line); min-width:0; }
+#navigation { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); flex:1 1 0; min-width:0; gap:0; }
+#navigation button { display:flex; align-items:baseline; justify-content:flex-start; gap:8px; min-height:39px; padding:5px 5px 8px 0; border:0; border-bottom:3px solid transparent; border-radius:0; font-size:20px; color:var(--muted); background:transparent; font-weight:400; }
+#navigation .nav-index { font-size:9px; font-weight:500; font-variant-numeric:tabular-nums; letter-spacing:.03em; }
+#navigation button[aria-current=page] { color:var(--ink); border-color:var(--accent); font-weight:700; }
+#navigation button[aria-current=page] .nav-index { color:var(--accent-text,var(--ink)); }
+.period-buttons { display:flex; flex:0 0 auto; border:1px solid var(--soft-line); }
+.period-buttons button { min-width:30px; min-height:26px; padding:3px 6px; border:0; border-radius:0; font-size:11px; }
+.period-buttons button[aria-pressed=true] { background:var(--ink); color:var(--paper); }
+#dashboard { min-width:0; min-height:0; overflow:hidden; position:relative; }
+.page-controls { display:grid; grid-template-columns:minmax(30px,1fr) minmax(0,2fr) minmax(30px,1fr); align-items:center; gap:6px; border-top:1px solid var(--ink); padding-top:2px; }
+.page-controls output { text-align:center; font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums; letter-spacing:.08em; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.page-controls button { display:flex; align-items:center; border:0; border-radius:0; padding:2px 0; min-height:27px; }
+#page-prev { justify-content:flex-start; }
+#page-next { justify-content:flex-end; }
 .empty { padding: 8px 0; color: var(--muted); }
 .settings-screen { position: fixed; top: 0; left: 0; width: 100%; height: var(--app-height); max-height: 100%; display: grid; grid-template-rows: auto auto minmax(0,1fr); gap: 6px; background: var(--paper); padding: 6px 8px; z-index: 10; overflow: hidden; }
 .settings-header { display: flex; justify-content: space-between; align-items: center; min-width: 0; }
 .settings-header strong { font-size: 1em; font-weight: 700; }
-.settings-nav, .settings-choices { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 4px; }
+.settings-nav, .settings-choices { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 4px; }
 .settings-choices { grid-template-columns: repeat(3,minmax(0,1fr)); margin-top: 8px; }
 .settings-nav button { padding-left: 0; padding-right: 0; border-color: var(--soft-line); }
 .settings-nav button[aria-pressed="true"] { border-color: var(--accent); }
@@ -48,12 +65,6 @@ p { margin: 0; }
 .theme-preview > span { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .palette-strip { display: flex; flex: 1 1 0; min-width: 0; max-width: 256px; height: 14px; border: 1px solid var(--line); overflow: hidden; }
 .palette-swatch { display: block; flex: 1 1 0; min-width: 0; height: 100%; }
-@media (max-width: 660px) { .identity { gap: 5px; } .brand .brand-word { display: none; } .topbar { gap: 5px; } #last-time { display: none; } }
-@media (max-width: 350px) { :root { font-size: 14px; --control-height: 32px; } #app { padding: 3px 4px; gap: 3px; } .topbar { flex-wrap: wrap; gap: 3px; } .identity { flex: 1 1 42%; } .top-actions { order: 2; } .period-buttons { order: 3; width: 100%; } .period-buttons button { flex: 1; } .page-controls { gap: 3px; } }
-@media (max-height: 360px) { :root { --control-height: 28px; font-size: 14px; } #app { gap: 2px; padding-top: 2px; padding-bottom: 2px; } .topbar { gap: 3px; } .brand { font-size: 16px; } .page-controls { padding-top: 1px; } .settings-screen { gap: 3px; padding-top: 3px; padding-bottom: 3px; } .settings-body p { font-size: 12px; line-height: 1.2; margin-bottom: 3px; } .theme-preview { margin-top: 3px; padding: 2px 0; font-size: 11px; } }
-@media (max-height: 220px) { :root { --control-height: 22px; font-size: 12px; } .settings-body p { font-size: 11px; } .theme-preview { gap: 3px; font-size: 10px; } .palette-strip { height: 10px; } }
-@media (max-width: 200px) { .identity { flex: 0 0 auto; } .status-button { display: none; } .top-actions button { padding: 2px 5px; } .period-buttons button { min-width: 0; padding: 2px; } .page-controls { grid-template-columns: minmax(0,1fr) minmax(0,1.5fr) minmax(0,1fr); font-size: 10px; } .page-controls output { font-size: 10px; } .settings-nav { gap: 2px; } .settings-nav button { font-size: 10px; } .theme-preview { flex-wrap: wrap; gap: 2px; } .palette-strip { flex-basis: 100%; } }
-
 .accent-options { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 4px; margin-top: 6px; }
 .accent-choice { display: flex; align-items: center; justify-content: center; gap: 6px; padding-left: 4px; padding-right: 4px; white-space: nowrap; }
 .accent-dot { flex: 0 0 10px; width: 10px; height: 10px; border-radius: 50%; }
@@ -62,14 +73,6 @@ p { margin: 0; }
 @media (max-height: 220px) { .accent-options { gap: 3px; margin-top: 3px; } }
 @media (max-width: 200px) { .accent-choice { font-size: 10px; gap: 3px; } .accent-dot { display: none; } }
 @media (max-height: 180px) { :root[data-theme="color"] .theme-preview { display: none; } }
-@media (max-height: 180px) {
-  :root { --control-height: 18px; font-size: 11px; }
-  button { padding-top: 2px; padding-bottom: 2px; }
-  #app { gap: 2px; }
-  .page-controls { padding-top: 1px; }
-}
-@media (max-width: 150px) { .settings-nav button { font-size: 9px; white-space: nowrap; } }
-
 /* Connection forms are button-paged, including status and long source addresses. */
 .connection-details { display: grid; grid-template-rows: minmax(0,1fr) auto; gap: 3px; }
 .detail-copy { min-height: 0; overflow: hidden; }
@@ -92,3 +95,53 @@ p { margin: 0; }
   .connection-actions button { font-size: 11px; }
 }
 @media (max-width: 200px) { .connection-actions button { font-size: 10px; } .secret-row button { padding-left: 3px; padding-right: 3px; } }
+
+
+@media(min-width:1000px) and (min-height:600px) {
+  #app { padding:16px 32px 8px; gap:10px; }
+  .brand { font-size:20px; } .device-status { font-size:14px; }
+  #navigation button { font-size:25px; min-height:49px; }
+  .period-buttons button { font-size:13px; min-width:36px; }
+}
+@media(max-width:600px) { .brand-word { display:none; } .topbar { gap:8px; } }
+@media(max-width:530px) { #app { padding-left:12px; padding-right:12px; } .navigation-row { gap:10px; } #navigation .nav-index { display:none; } #navigation button { font-size:18px; } }
+@media(max-width:350px) {
+  :root { font-size:14px; --control-height:32px; }
+  #app { padding:4px 6px; gap:4px; } .brand { display:none; } .identity { gap:0; }
+  .topbar { gap:4px; grid-template-columns:24px minmax(0,1fr) auto; } .device-status { font-size:11px; gap:5px; }
+  .icon-button { width:25px; min-height:26px; padding:3px; } .icon-button .icon { width:18px; height:18px; }
+  #battery-symbol>.icon { width:21px; } .navigation-row { gap:6px; }
+  #navigation button { font-size:15px; min-height:31px; padding:4px 2px 6px 0; }
+  .period-buttons button { min-width:22px; min-height:23px; font-size:10px; padding:2px 3px; }
+}
+@media(max-height:360px) {
+  :root { --control-height:28px; font-size:14px; }
+  #app { padding-top:3px; padding-bottom:3px; gap:3px; } .topbar { padding-bottom:2px; }
+  .icon-button { min-height:24px; } #navigation button { min-height:28px; font-size:16px; padding-top:3px; padding-bottom:4px; }
+  .page-controls button { min-height:22px; } .settings-screen { gap:3px; padding-top:3px; padding-bottom:3px; }
+  .settings-body p { font-size:12px; line-height:1.2; margin-bottom:3px; }
+  .theme-preview { margin-top:3px; padding:2px 0; font-size:11px; }
+}
+@media(max-height:220px) {
+  :root { --control-height:22px; font-size:12px; }
+  .icon-button { min-height:20px; padding:2px; } .icon-button .icon { width:16px; height:16px; }
+  .device-status { font-size:10px; } #navigation button { min-height:23px; font-size:12px; padding:2px 0 3px; }
+  .period-buttons button { min-height:20px; font-size:10px; }
+  .settings-body p { font-size:11px; } .theme-preview { gap:3px; font-size:10px; } .palette-strip { height:10px; }
+}
+@media(max-width:200px) {
+  #app { padding:2px 4px; gap:2px; } .identity { display:none; }
+  .topbar { grid-template-columns:minmax(0,1fr) auto; gap:2px; }
+  .device-status { font-size:9px; gap:2px; justify-content:flex-start; } .device-status .icon { width:12px; height:14px; }
+  #battery-symbol>.icon { width:16px; height:14px; } #battery-symbol>.charging-mark { width:7px; height:9px; }
+  #device-battery { gap:0; } #battery-value { min-width:0; }
+  .top-actions { gap:0; } .top-actions .icon-button { width:15px; padding:1px; min-height:18px; } .top-actions .icon { width:13px; height:13px; }
+  .navigation-row { display:grid; grid-template-columns:minmax(0,1fr); gap:2px; }
+  #navigation button { justify-content:center; min-height:20px; font-size:11px; }
+  .period-buttons { width:100%; } .period-buttons button { flex:1; min-width:0; min-height:17px; font-size:10px; padding:1px; }
+  .page-controls { gap:2px; padding-top:1px; } .page-controls output { font-size:10px; } .page-controls button { min-height:18px; } .page-controls .icon { width:16px; height:16px; }
+  .settings-nav { gap:2px; } .settings-nav button { font-size:10px; }
+  .theme-preview { flex-wrap:wrap; gap:2px; } .palette-strip { flex-basis:100%; }
+}
+@media(max-height:180px) { :root { --control-height:18px; font-size:11px; } button { padding-top:2px; padding-bottom:2px; } #app { gap:2px; } .topbar { padding-bottom:1px; } }
+@media(max-width:150px) { .settings-screen { padding-left:2px; padding-right:2px; } .settings-nav { gap:0; } .settings-nav button { font-size:9px; white-space:nowrap; } }

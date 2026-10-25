@@ -4,6 +4,10 @@ import { absoluteTime } from './model.mjs';
 import { projectDashboardStats, projectHistoryForCache, projectArchiveForCache } from './dashboard-model.mjs';
 import { createDashboard } from './dashboard.js';
 import { themeKey, accentKey, ACCENTS, normalizeTheme, normalizeAccent } from './theme.mjs';
+import { installPageSwipe } from './gestures.mjs';
+import { createDisplayRefresh } from './display.mjs';
+import { icon } from './icons.mjs';
+import { normalizeDeviceStatus, networkLabel } from './device-status.mjs';
 
 const $ = id => document.getElementById(id);
 const cacheKey = 'token-monitor-eink-snapshot-v1';
@@ -25,15 +29,53 @@ const sourceStampKey = 'token-monitor-eink-native-source-v1';
 try { connectionConfig = nativeConnection(nativeBridge); } catch (_) { connectionMessage = '无法读取连接配置，请重新保存。'; }
 const sourceFence = createSourceFence(sourceKey(connectionConfig));
 function isHidden() { return document.hidden || nativeHidden; }
+const displayRefresh = createDisplayRefresh(nativeBridge, isHidden);
+document.querySelectorAll('[data-icon]').forEach(node => node.replaceChildren(icon(node.dataset.icon)));
+$('hub-state-icon').replaceChildren(icon('link'));
+let deviceStatus = normalizeDeviceStatus(), deviceSignature = '';
+function showDeviceStatus(value) {
+  const next = normalizeDeviceStatus(value), signature = JSON.stringify(next);
+  if (signature === deviceSignature) return;
+  const visibleChanged = next.time !== deviceStatus.time || next.batteryPercent !== deviceStatus.batteryPercent
+    || next.charging !== deviceStatus.charging || next.network !== deviceStatus.network || next.fullscreen !== deviceStatus.fullscreen;
+  deviceStatus = next; deviceSignature = signature;
+  $('device-time').textContent = next.time;
+  $('device-network').replaceChildren(icon(next.network));
+  $('device-network').title = networkLabel(next); $('device-network').setAttribute('aria-label', networkLabel(next));
+  const battery = icon('battery');
+  if (next.batteryPercent !== null) {
+    const fill = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    for (const [key, v] of Object.entries({ x:5, y:9, width:next.batteryPercent * .11, height:6, fill:'currentColor', stroke:'none' })) fill.setAttribute(key, v);
+    battery.append(fill);
+  }
+  $('battery-symbol').replaceChildren(battery);
+  if (next.charging) { const bolt = icon('bolt'); bolt.classList.add('charging-mark'); $('battery-symbol').append(bolt); }
+  $('battery-value').textContent = next.batteryPercent === null ? '—' : next.batteryPercent + '%';
+  const batteryLabel = (next.batteryPercent === null ? '电量未知' : '电量 ' + next.batteryPercent + '%') + (next.charging ? ' · 充电中' : '');
+  $('device-battery').title = batteryLabel; $('device-battery').setAttribute('aria-label', batteryLabel);
+  document.documentElement.dataset.fullscreen = String(next.fullscreen);
+  const toggle = $('fullscreen-toggle'), label = next.fullscreen ? '退出全屏' : '进入全屏';
+  toggle.replaceChildren(icon(next.fullscreen ? 'collapse' : 'expand'));
+  toggle.setAttribute('aria-pressed', String(next.fullscreen)); toggle.setAttribute('aria-label', label); toggle.title = label;
+  toggle.disabled = typeof nativeBridge.setFullscreen !== 'function';
+  if (visibleChanged && $('settings').hidden) displayRefresh.request('content');
+}
+try { showDeviceStatus(JSON.parse(nativeBridge.getDeviceStatus?.() || '{}')); } catch (_) { showDeviceStatus({}); }
+window.addEventListener('tokenmonitor:device-status', event => showDeviceStatus(event.detail));
+$('fullscreen-toggle').addEventListener('click', () => {
+  try { nativeBridge.setFullscreen?.(!deviceStatus.fullscreen); } catch (_) { /* Preserve the last confirmed native mode. */ }
+});
 
 function showTheme(value, accentValue) {
   const theme = normalizeTheme(value), accent = normalizeAccent(accentValue);
+  const changed = document.documentElement.dataset.theme !== theme || document.documentElement.dataset.accent !== accent;
   document.documentElement.dataset.theme = theme;
   document.documentElement.dataset.accent = accent;
   document.querySelectorAll('[data-theme-choice]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.themeChoice === theme)));
   document.querySelectorAll('[data-accent-choice]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.accentChoice === accent)));
   $('accent-options').hidden = theme !== 'color';
   $('theme-caption').textContent = theme === 'color' ? ACCENTS.find(a => a.id === accent).label + ' · 16 阶' : '16 级灰度';
+  if (changed) displayRefresh.request('full');
 }
 ACCENTS.forEach(accent => {
   const button = document.createElement('button');
@@ -54,7 +96,7 @@ document.querySelectorAll('[data-theme-choice]').forEach(b => b.addEventListener
   showTheme(theme, document.documentElement.dataset.accent);
   try { localStorage.setItem(themeKey, theme); } catch (_) { /* Keep the in-memory choice. */ }
 }));
-const dashboard = createDashboard($('dashboard'));
+const dashboard = createDashboard($('dashboard'), reason => { if ($('settings').hidden) displayRefresh.request(reason); });
 let inFlight = false;
 let timer = null;
 let snapshot = null;
@@ -74,7 +116,12 @@ let archiveForceQueued = false;
 let refreshQueued = false;
 const transport = createTransport();
 
-function setText(node, text) { if (node.textContent !== text) node.textContent = text; }
+function setText(node, text) {
+  if (node.textContent !== text) {
+    node.textContent = text;
+    if (node.getClientRects().length) displayRefresh.request('content');
+  }
+}
 function render() {
   dashboard.update(snapshot, history, { receivedAt, historyReceivedAt, historyError, historyCached, archiveReceivedAt, archiveError, archiveCached }, archive);
 }
@@ -86,6 +133,14 @@ function notice(title, detail) {
     : title === '当前快照已清除' && detail.includes('未允许') ? '部分缓存未清除'
     : label + (snapshot && !['本机缓存', '当前快照已清除'].includes(title) ? ' · 保留缓存' : '');
   setText($('connection'), label); detailMessage = detail || detailText;
+  const connectionState = healthy ? 'online' : ['本机缓存','已连接'].includes(title) ? 'cached' : 'error';
+  if ($('status-toggle').dataset.state !== connectionState) {
+    $('status-toggle').dataset.state = connectionState;
+    $('hub-state-icon').replaceChildren(icon(connectionState === 'error' ? 'link-off' : 'link'));
+    if ($('settings').hidden) displayRefresh.request('content');
+  }
+  $('status-toggle').title = 'Hub：' + label;
+  $('status-toggle').setAttribute('aria-label', 'Hub：' + label + '，查看连接详情');
   setText($('last-time'), receivedAt ? new Date(receivedAt).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false }) : '');
   updateDetailPages();
 }
@@ -210,7 +265,10 @@ $('clear-cache').addEventListener('click', () => {
   snapshot = null; receivedAt = null; history = null; historyReceivedAt = null; historyRevision = null; historyError = ''; historyCached = true; archive = null; archiveReceivedAt = null; archiveError = ''; archiveCached = true; archiveChecked = false; archiveAttemptAt = 0; dashboard.clear();
   notice('当前快照已清除', removed ? '用量、历史与本机会话归档缓存已清除；刷新后重新读取。' : '界面已清空，但未允许清除部分持久缓存，重新打开可能恢复旧数据。');
 });
-function visibilityChanged() { if (isHidden()) clearTimeout(timer); else refresh(); }
+function visibilityChanged() {
+  if (isHidden()) { clearTimeout(timer); displayRefresh.cancel(); cancelDashboardSwipe(); cancelSettingsSwipe(); }
+  else refresh();
+}
 document.addEventListener('visibilitychange', visibilityChanged);
 window.addEventListener('tokenmonitor:visibility', event => { nativeHidden = event.detail?.hidden === true; visibilityChanged(); });
 
@@ -220,12 +278,30 @@ function showSettings(page = 'refresh') {
   document.querySelectorAll('[data-setting-pane]').forEach(p => { p.hidden = p.dataset.settingPane !== page; });
   if (page === 'native') renderConnection();
   if (page === 'connection') updateDetailPages();
+  if (page === 'screen') showDisplayCapabilities();
+  displayRefresh.request('page');
 }
 function closeSettings() {
   if ($('settings').contains(document.activeElement)) document.activeElement.blur();
   $('settings').hidden = true;
   $('hub-secret').value = ''; $('archive-secret').value = ''; clearHubSecret = false; clearArchiveSecret = false;
+  displayRefresh.request('page');
 }
+function showDisplayCapabilities() {
+  let supported = false;
+  try { supported = JSON.parse(nativeBridge.getDisplayCapabilities?.() || '{}').supported === true; } catch (_) { /* System-managed display. */ }
+  setText($('screen-mode'), supported ? '每 6 次翻页全刷' : '由系统管理刷新');
+  $('screen-clear').disabled = !supported;
+}
+$('screen-clear').addEventListener('click', () => displayRefresh.request('full'));
+window.addEventListener('tokenmonitor:display-capabilities', showDisplayCapabilities);
+showDisplayCapabilities();
+// Settings controls change a fixed page; never refresh the obscured dashboard.
+$('settings').addEventListener('click', event => {
+  if (!event.target.closest('button') || event.target.closest('#screen-clear')) return;
+  const before = $('settings').outerHTML;
+  queueMicrotask(() => { if ($('settings').outerHTML !== before) displayRefresh.request('page'); });
+}, true);
 $('settings-open').addEventListener('click', () => showSettings());
 $('settings-close').addEventListener('click', closeSettings);
 $('status-toggle').addEventListener('click', () => showSettings('connection'));
@@ -261,6 +337,7 @@ function updateDetailPages() {
   detailPages = splitText(details.join('。'), $('detail')); detailPage = Math.min(detailPage, detailPages.length - 1);
   $('detail').textContent = detailPages[detailPage]; $('detail-position').textContent = (detailPage + 1) + '/' + detailPages.length;
   $('detail-prev').disabled = detailPage === 0; $('detail-next').disabled = detailPage >= detailPages.length - 1;
+  if (!$('settings').hidden) displayRefresh.request('content');
 }
 $('detail-prev').addEventListener('click', () => { detailPage = Math.max(0, detailPage - 1); updateDetailPages(); });
 $('detail-next').addEventListener('click', () => { detailPage = Math.min(detailPages.length - 1, detailPage + 1); updateDetailPages(); });
@@ -292,6 +369,7 @@ function renderConnection() {
   $('connection-position').textContent = connectionPage < 3 ? ['地址', '密钥', '连接'][connectionPage] : (connectionPage - 2) + '/' + connectionMessagePages.length;
   $('connection-prev').disabled = connectionPage === 0;
   $('connection-next').disabled = connectionPage >= 3 && connectionPage >= connectionMessagePages.length + 2;
+  if (!$('settings').hidden) displayRefresh.request('content');
 }
 function resetSourceCaches() {
   [cacheKey, historyCacheKey, archiveCacheKey].forEach(key => { try { localStorage.removeItem(key); } catch (_) { /* Optional storage. */ } });
@@ -334,9 +412,7 @@ window.tokenMonitorBack = () => {
     if (!document.querySelector('[data-setting-pane="native"]').hidden && connectionPage > 0) { connectionPage = 0; renderConnection(); return true; }
     closeSettings(); return true;
   }
-  const back = Array.from($('dashboard').querySelectorAll('button')).find(button => button.textContent.trim() === '返回');
-  if (back) { back.click(); return true; }
-  return false;
+  return dashboard.back();
 };
 function sizeViewport() {
   const viewport = window.visualViewport;
@@ -349,7 +425,14 @@ if (window.visualViewport) window.visualViewport.addEventListener('resize', size
 // All dashboard navigation is paginated. Never pan the viewport or a nested list.
 document.addEventListener('wheel', e => e.preventDefault(), { passive: false });
 document.addEventListener('touchmove', e => e.preventDefault(), { passive: false });
+const cancelDashboardSwipe = installPageSwipe($('dashboard'), delta => dashboard.turn(delta), () => $('settings').hidden && !isHidden());
+const cancelSettingsSwipe = installPageSwipe(document.querySelector('.settings-body'), delta => {
+  const pane = document.querySelector('[data-setting-pane]:not([hidden])')?.dataset.settingPane;
+  const prefix = pane === 'connection' ? 'detail' : pane === 'native' ? 'connection' : null;
+  if (prefix) $(prefix + (delta > 0 ? '-next' : '-prev')).click();
+}, () => !$('settings').hidden && !isHidden());
 document.addEventListener('keydown', e => {
+  if (e.defaultPrevented) return;
   if (e.key === 'Escape') { if (window.tokenMonitorBack()) e.preventDefault(); return; }
   if (e.target.matches('input,textarea')) return;
   if (['PageDown', 'PageUp', 'ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) e.preventDefault();

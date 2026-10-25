@@ -1,9 +1,10 @@
 package dev.tokenmonitor.eink;
 
 import android.app.Activity;
+import android.content.res.Configuration;
+import android.graphics.Bitmap;
 import android.os.Bundle;
 import android.view.View;
-import android.view.WindowInsets;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebResourceRequest;
@@ -11,6 +12,7 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.FrameLayout;
 import org.json.JSONObject;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -27,6 +29,9 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class MainActivity extends Activity {
     private WebView webView;
     private ConnectionStore connections;
+    private DisplayRefreshController displayRefresh;
+    private FullscreenController fullscreen;
+    private DeviceStatusController deviceStatus;
     private volatile boolean foreground;
     private final Set<HttpURLConnection> activeRequests = ConcurrentHashMap.newKeySet();
 
@@ -34,6 +39,7 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         connections = new ConnectionStore(this);
         webView = new WebView(this);
+        displayRefresh = new DisplayRefreshController(webView);
         WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
@@ -56,16 +62,12 @@ public final class MainActivity extends Activity {
         webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
         webView.addJavascriptInterface(new ConnectionBridge(), "TokenMonitorAndroid");
         webView.setWebViewClient(new LocalClient());
-        // Keep the fixed viewport clear of status/navigation bars and the settings keyboard.
-        if (android.os.Build.VERSION.SDK_INT >= 30) {
-            getWindow().setDecorFitsSystemWindows(false);
-            webView.setOnApplyWindowInsetsListener((view, insets) -> {
-                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.ime());
-                view.setPadding(bars.left, bars.top, bars.right, bars.bottom);
-                return insets;
-            });
-        }
-        setContentView(webView);
+        FrameLayout viewport = new FrameLayout(this);
+        viewport.addView(webView, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        setContentView(viewport);
+        fullscreen = new FullscreenController(this, viewport, enabled -> deviceStatus.setFullscreen(enabled));
+        deviceStatus = new DeviceStatusController(this, fullscreen.isEnabled(), this::dispatchDeviceStatus);
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                     android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
@@ -79,9 +81,18 @@ public final class MainActivity extends Activity {
             catch (Exception ignored) { return "{}"; }
         }
         @JavascriptInterface public String saveConnection(String json) { return connections.save(json); }
+        @JavascriptInterface public String getDisplayCapabilities() { return displayRefresh.capabilities(); }
+        @JavascriptInterface public String getDeviceStatus() { return deviceStatus.snapshotJson(); }
+        @JavascriptInterface public void setFullscreen(boolean enabled) {
+            runOnUiThread(() -> { if (!isDestroyed()) fullscreen.setEnabled(enabled); });
+        }
+        @JavascriptInterface public void requestDisplayRefresh(String reason) {
+            runOnUiThread(() -> displayRefresh.request(reason));
+        }
     }
 
     private final class LocalClient extends WebViewClient {
+        @Override public void onPageStarted(WebView view, String url, Bitmap favicon) { deviceStatus.pageLoading(); }
         @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return true; }
         @Override public boolean shouldOverrideUrlLoading(WebView view, String url) { return true; }
         @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
@@ -95,7 +106,11 @@ public final class MainActivity extends Activity {
                 return response(200, mime, getAssets().open(path.substring(1)));
             } catch (Exception ignored) { return error(503, "ui_unavailable"); }
         }
-        @Override public void onPageFinished(WebView view, String url) { dispatchVisibility(); }
+        @Override public void onPageFinished(WebView view, String url) {
+            dispatchVisibility();
+            deviceStatus.pageReady();
+            displayRefresh.request("content");
+        }
     }
 
     private WebResourceResponse proxy(String path) {
@@ -168,15 +183,37 @@ public final class MainActivity extends Activity {
         if (webView != null) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('tokenmonitor:visibility',{detail:{hidden:"
                 + (!foreground) + "}}))", null);
     }
+    private void dispatchDeviceStatus(String json) {
+        if (!foreground || webView == null) return;
+        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('tokenmonitor:device-status',{detail:"
+                + json + "}))", null);
+    }
     @Override protected void onResume() {
         super.onResume(); foreground = true;
-        if (webView != null) { webView.onResume(); dispatchVisibility(); }
+        if (webView != null) {
+            webView.onResume();
+            displayRefresh.resume();
+            fullscreen.resume();
+            deviceStatus.start();
+            dispatchVisibility();
+        }
     }
     @Override protected void onPause() {
         foreground = false; dispatchVisibility();
+        if (deviceStatus != null) deviceStatus.stop();
+        if (fullscreen != null) fullscreen.pause();
+        if (displayRefresh != null) displayRefresh.pause();
         for (HttpURLConnection request : activeRequests) request.disconnect();
         if (webView != null) webView.onPause();
         super.onPause();
+    }
+    @Override public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (fullscreen != null) fullscreen.focusChanged(hasFocus);
+    }
+    @Override public void onConfigurationChanged(Configuration configuration) {
+        super.onConfigurationChanged(configuration);
+        if (fullscreen != null) fullscreen.configurationChanged();
     }
     @Override public void onBackPressed() {
         handleBack();
@@ -187,6 +224,9 @@ public final class MainActivity extends Activity {
         });
     }
     @Override protected void onDestroy() {
+        if (deviceStatus != null) deviceStatus.stop();
+        if (fullscreen != null) fullscreen.destroy();
+        if (displayRefresh != null) displayRefresh.destroy();
         if (webView != null) {
             webView.removeJavascriptInterface("TokenMonitorAndroid"); webView.stopLoading(); webView.destroy(); webView = null;
         }

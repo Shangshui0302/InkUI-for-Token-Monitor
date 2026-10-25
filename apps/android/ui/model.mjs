@@ -8,12 +8,68 @@ const statuses = {
   unavailable: '来源不可用',
   error: '采集出错'
 };
-const names = { codex: 'Codex', deepseek: 'DeepSeek', antigravity: 'Antigravity' };
-const windowNames = { weekly: '每周额度', session: '会话额度', billing: '账单额度' };
+const names = {
+  claude: 'Claude', codex: 'Codex', opencode: 'OpenCode', cursor: 'Cursor',
+  antigravity: 'Antigravity', cline: 'Cline', factory: 'Factory Droid', kimi: 'Kimi',
+  grok: 'Grok', copilot: 'GitHub Copilot', zed: 'Zed', commandcode: 'Command Code',
+  mimo: 'Xiaomi MiMo', zai: 'GLM', zaiteam: 'GLM Team', kiro: 'Kiro',
+  workbuddy: 'WorkBuddy', qoder: 'Qoder', deepseek: 'DeepSeek', devin: 'Devin',
+  minimax: 'Minimax', typesafe: 'TypeSafe', openrouter: 'OpenRouter',
+  volcengine: 'Volcengine', ollama: 'Ollama', trae: 'Trae CN', alibaba: 'Alibaba Cloud',
+  stepfun: 'StepFun', notion: 'Notion AI', thirdparty: 'Third-party APIs'
+};
+const windowNames = { daily: '每日额度', weekly: '每周额度', session: '会话额度', billing: '账单额度' };
 const providerOrder = { codex: 0, deepseek: 1, antigravity: 2 };
 const finite = value => typeof value === 'number' && Number.isFinite(value);
+const object = value => value !== null && typeof value === 'object' && !Array.isArray(value);
 const stringOrNull = value => typeof value === 'string' ? value : null;
 const numberOrNull = value => finite(value) ? value : null;
+const booleanOrNull = value => typeof value === 'boolean' ? value : null;
+const pick = (value, fields, convert) => Object.fromEntries(fields.map(key => [key, convert(value[key])]));
+const strings = (value, fields) => pick(value, fields.split(' '), stringOrNull);
+const numbers = (value, fields) => pick(value, fields.split(' '), numberOrNull);
+const booleans = (value, fields) => pick(value, fields.split(' '), booleanOrNull);
+const list = (value, project) => Array.isArray(value) ? value.filter(object).map(project) : [];
+const windowProjection = window => ({
+  ...strings(window, 'kind label source metric limitId boundaryKind resetsAt resetDescription detail currency'),
+  ...numbers(window, 'used limit remaining usedPercent remainingPercent windowMinutes'),
+  ...booleans(window, 'additional showMeter')
+});
+const balanceProjection = balance => !object(balance) ? null : ({
+  ...strings(balance, 'currency quotaGroup expiresAt trackingSince planStatus todayUsageDate latestModelUsageDate todayUsageBasis snapshotDate'),
+  ...numbers(balance, 'amount todaySpend weekSpend monthSpend allTimeSpend requestCount giftBalance cashBalance planUsed planLimit planPercent todayTokenTotal'),
+  ...booleans(balance, 'monthSinceTracking'),
+  tranches: list(balance.tranches, tranche => ({ ...numbers(tranche, 'amount'), ...strings(tranche, 'currency expiresAt') }))
+});
+const resetCreditsProjection = credits => !object(credits) ? null : ({
+  ...numbers(credits, 'availableCount'), ...strings(credits, 'nextExpiresAt'),
+  expirations: Array.isArray(credits.expirations) ? credits.expirations.filter(value => typeof value === 'string') : [],
+  grants: list(credits.grants, grant => ({
+    ...strings(grant, 'id label startsAt endsAt'), ...numbers(grant, 'resetsLeft resetsTotal'),
+    ...booleans(grant, 'usableNow useRequiresLimit paused'),
+    clears: Array.isArray(grant.clears) ? grant.clears.filter(value => typeof value === 'string') : []
+  }))
+});
+const usageProjection = usage => !object(usage) ? null : ({
+  ...strings(usage, 'period'),
+  ...numbers(usage, 'requests todayTokens weekTokens inputTokens outputTokens cacheReadTokens cacheCreationTokens totalTokens standardCost actualCost averageDurationMs')
+});
+const providerProjection = provider => ({
+  ...strings(provider, 'provider adapterId accountLabel accountName accountEmail planLabel workspaceKind plan planType subscriptionPlan status actionRequired source sourceDetail updatedAt region'),
+  stale: provider.stale === true,
+  ...numbers(provider, 'balanceUsd'),
+  balance: balanceProjection(provider.balance),
+  resetCredits: resetCreditsProjection(provider.resetCredits),
+  usageSummary: usageProjection(provider.usageSummary),
+  windows: provider.windows.map(windowProjection)
+});
+function validateStats(stats) {
+  if (!object(stats) || !object(stats.limits) || !Array.isArray(stats.limits.providers) ||
+      stats.limits.providers.some(provider => !object(provider) || typeof provider.provider !== 'string' ||
+        !Array.isArray(provider.windows) || provider.windows.some(window => !object(window)))) {
+    throw new Error('额度数据格式不正确');
+  }
+}
 
 export function windowValue(window) {
   if (finite(window.remainingPercent)) {
@@ -41,66 +97,41 @@ export function windowValue(window) {
 }
 
 export function normalizeStats(stats) {
-  if (!stats || typeof stats !== 'object' || Array.isArray(stats) ||
-      !stats.limits || !Array.isArray(stats.limits.providers)) {
-    throw new Error('额度数据格式不正确');
-  }
-  const providers = stats.limits.providers.map((provider, index) => {
-    if (!provider || typeof provider !== 'object' ||
-        typeof provider.provider !== 'string' || !Array.isArray(provider.windows)) {
-      throw new Error('额度数据格式不正确');
-    }
+  validateStats(stats);
+  const providers = stats.limits.providers.map((raw, index) => {
+    const provider = providerProjection(raw);
     return {
+      ...provider,
       key: index,
       order: Object.prototype.hasOwnProperty.call(providerOrder, provider.provider) ? providerOrder[provider.provider] : 3,
       name: names[provider.provider] || provider.provider,
-      account: typeof provider.accountLabel === 'string' ? provider.accountLabel : '',
+      account: provider.accountLabel || '',
+      statusCode: provider.status,
       status: statuses[provider.status] || '状态未知',
       ok: provider.status === 'ok',
-      stale: provider.stale === true,
-      updatedAt: provider.updatedAt,
-      source: provider.source === 'oauth' ? 'OAuth' : provider.source === 'api' ? 'API' : '',
-      windows: provider.windows.map(window => {
-        if (!window || typeof window !== 'object') {
-          throw new Error('额度数据格式不正确');
-        }
-        return {
-          label: typeof window.label === 'string' && window.label.trim() ? window.label : windowNames[window.kind] || '额度窗口',
-          ...windowValue(window),
-          resetsAt: window.resetsAt
-        };
-      })
+      source: ['oauth', 'cli', 'web', 'rpc', 'local', 'api'].includes(provider.source) ? provider.source : '',
+      windows: provider.windows.map(window => ({
+        ...window,
+        rawLabel: window.label,
+        label: window.label?.trim() ? window.label : windowNames[window.kind] || '额度窗口',
+        ...windowValue(window)
+      }))
     };
   });
-  // The input index breaks ties explicitly, preserving multiple accounts and
-  // unknown-provider ordering even without relying on stable Array.sort.
+  // Keep independent accounts and upstream window order; index breaks priority ties.
   providers.sort((left, right) => left.order - right.order || left.key - right.key);
   return providers;
 }
 
-// Only this explicit projection is persisted; the Hub snapshot can contain
-// unrelated account identifiers, devices and usage history.
+// Persist only typed display fields. Authenticated Hub responses also contain
+// account identifiers and unrelated device/session data that must stay out.
 export function projectStatsForCache(stats) {
-  normalizeStats(stats);
+  validateStats(stats);
   return {
     limits: {
-      providers: stats.limits.providers.map(provider => ({
-        provider: provider.provider,
-        accountLabel: stringOrNull(provider.accountLabel),
-        status: stringOrNull(provider.status),
-        stale: provider.stale === true,
-        updatedAt: stringOrNull(provider.updatedAt),
-        source: stringOrNull(provider.source),
-        windows: provider.windows.map(window => ({
-          kind: stringOrNull(window.kind),
-          label: stringOrNull(window.label),
-          remainingPercent: numberOrNull(window.remainingPercent),
-          usedPercent: numberOrNull(window.usedPercent),
-          remaining: numberOrNull(window.remaining),
-          currency: stringOrNull(window.currency),
-          resetsAt: stringOrNull(window.resetsAt)
-        }))
-      }))
+      ...(Object.hasOwn(stats.limits, 'updatedAt') ? { updatedAt: stringOrNull(stats.limits.updatedAt) } : {}),
+      ...(Object.hasOwn(stats.limits, 'refreshMs') ? { refreshMs: numberOrNull(stats.limits.refreshMs) } : {}),
+      providers: stats.limits.providers.map(providerProjection)
     }
   };
 }
