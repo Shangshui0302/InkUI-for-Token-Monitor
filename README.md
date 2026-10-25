@@ -4,6 +4,10 @@
 
 看板有总览、额度、会话、活动、明细五页，支持日／月／累计切换；展示 tokens、估算 USD cost、分项与速度，以及 models、clients、projects、devices。墨水屏页面固定在可用视口内，不使用滚动；通过页面、时段、筛选和翻页按钮浏览，长值进入分段详情页查看。会话列表可切换全部／运行中，活动页提供全年热力图、趋势、每日与每月视图。“设置 → 显示”可切换黑白／彩色墨水屏配色；彩色提供蓝、青、绿、琥珀、玫瑰、紫六种明亮重点色，保持白底黑字；选中按钮使用亮色实底、深色文字，比例条与图表随重点色变化。模式与重点色分别记忆，切回黑白不会丢失偏好。两种模式共用紧凑布局和 16 阶热力色阶，无动画。页面只读，不提供会话控制；归档数据来自本机已有记录，不代表跨设备完整历史，也不表示完整复制了对话正文或工具调用详情。默认每 60 秒读取，可改为每 5 分钟或手动；页面隐藏时暂停，各类数据断线时分别保留最近成功缓存。
 
+## Android 安装包
+
+独立 Android 工程在 `apps/android/`，内置同一套墨水屏 UI 和配色，连接局域网 Token Monitor Hub；可额外连接只读归档网关，保留本机累计会话信息。最低 Android 10。连接、构建及签名说明见 [Android APK](docs/token-monitor-android.md)。
+
 ## 启动
 
 先启动已配置账号的 Token Monitor。此电脑使用 `arch` Distrobox 中的入口：
@@ -39,7 +43,7 @@ umask 077
 
 ```bash
 python3 -m unittest discover -s tools -p 'test_token_monitor_eink.py' -v
-node --test apps/eink/test_model.mjs apps/eink/test_dashboard_model.mjs apps/eink/test_theme.mjs
+node --test apps/eink/test_model.mjs apps/eink/test_dashboard_model.mjs apps/eink/test_theme.mjs apps/eink/test_connection.mjs
 node --check apps/eink/app.js
 ```
 

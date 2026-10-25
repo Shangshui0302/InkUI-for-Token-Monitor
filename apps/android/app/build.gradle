@@ -1,0 +1,64 @@
+plugins { id 'com.android.application' }
+
+def signingFile = providers.gradleProperty('tokenMonitorSigningFile').orNull
+def signingProperties = new Properties()
+if (signingFile != null) {
+    file(signingFile).withInputStream { signingProperties.load(it) }
+    ['storeFile', 'storePassword', 'keyAlias', 'keyPassword'].each {
+        if (!signingProperties.getProperty(it)) throw new GradleException('Missing release signing property: ' + it)
+    }
+}
+if (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') } && signingFile == null) {
+    throw new GradleException('Release requires -PtokenMonitorSigningFile=/absolute/path/to/private.properties')
+}
+
+def einkAssets = tasks.register('stageEinkAssets', Sync) {
+    from('../../eink') {
+        include 'index.html', 'styles.css', 'themes.css', 'dashboard.css', 'app.js',
+                'model.mjs', 'dashboard-model.mjs', 'dashboard.js', 'theme.mjs',
+                'connection.mjs', 'transport.mjs'
+    }
+    into layout.buildDirectory.dir('generated/einkAssets')
+}
+
+android {
+    namespace 'dev.tokenmonitor.eink'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'dev.tokenmonitor.eink'
+        minSdk 29
+        targetSdk 36
+        versionCode 1
+        versionName '1.0.0'
+    }
+    sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/einkAssets'))
+    compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        if (signingFile != null) {
+            release {
+                storeFile file(signingProperties.getProperty('storeFile'))
+                storePassword signingProperties.getProperty('storePassword')
+                keyAlias signingProperties.getProperty('keyAlias')
+                keyPassword signingProperties.getProperty('keyPassword')
+            }
+        }
+    }
+    buildTypes {
+        debug { debuggable true; applicationIdSuffix '.debug' }
+        release {
+            debuggable false
+            minifyEnabled false
+            if (signingFile != null) signingConfig signingConfigs.release
+        }
+    }
+}
+tasks.named('preBuild').configure { dependsOn einkAssets }
+
+// Pure Java checks run without Android or a test dependency.
+tasks.register('checkNativePolicy', JavaExec) {
+    dependsOn 'compileDebugUnitTestJavaWithJavac'
+    classpath = files(layout.buildDirectory.dir('intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes'),
+                      layout.buildDirectory.dir('intermediates/javac/debug/compileDebugJavaWithJavac/classes'))
+    mainClass = 'dev.tokenmonitor.eink.NativePolicyTest'
+}

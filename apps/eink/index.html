@@ -47,8 +47,18 @@
         <div class="theme-preview"><span id="theme-caption">16 级灰度</span><div class="palette-strip" role="img" aria-label="从浅到深的16级色阶"><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span><span class="palette-swatch"></span></div></div>
       </section>
       <section data-setting-pane="refresh"><p id="interval-current">每 60 秒</p><div class="settings-choices"><button type="button" data-interval="60" aria-pressed="true">60 秒</button><button type="button" data-interval="300">5 分钟</button><button type="button" data-interval="0">手动</button></div><input id="interval" type="hidden" value="60"></section>
-      <section data-setting-pane="connection" hidden><p id="last-success"></p><p id="detail">正在连接</p></section>
+      <section data-setting-pane="connection" class="connection-details" hidden><div class="detail-copy"><p id="last-success"></p><p id="detail">正在连接</p></div><div class="setting-pager"><button id="detail-prev" type="button">上页</button><output id="detail-position"></output><button id="detail-next" type="button">下页</button></div></section>
       <section data-setting-pane="token" hidden><form id="auth-form"><label for="token">查看令牌</label><input id="token" type="password" autocomplete="off" spellcheck="false"><button type="submit">应用</button></form></section>
+      <section data-setting-pane="native" id="native-connection" hidden>
+        <div class="connection-sources"><button type="button" data-connection-source="hub" aria-pressed="true">Hub</button><button type="button" data-connection-source="archive">归档</button></div>
+        <div id="connection-pages">
+          <div data-connection-page="address"><input id="hub-url" type="url" placeholder="Hub 地址" aria-label="Hub 地址，只填 http(s) 来源地址" autocomplete="off" autocapitalize="none" spellcheck="false"><input id="archive-url" type="url" placeholder="归档地址（可选）" aria-label="归档网关地址，可选，只填 http(s) 来源地址" autocomplete="off" autocapitalize="none" spellcheck="false" hidden></div>
+          <div data-connection-page="secret" class="secret-row" hidden><input id="hub-secret" type="password" aria-label="Hub 密钥，留空保留已有密钥" placeholder="Hub 密钥" autocomplete="off" spellcheck="false"><input id="archive-secret" type="password" aria-label="归档查看令牌，留空保留已有令牌" placeholder="归档查看令牌" autocomplete="off" spellcheck="false" hidden><button id="connection-secret-clear" type="button">清除</button></div>
+          <div data-connection-page="actions" class="connection-actions" hidden><button id="connection-save" type="button">保存并连接</button><button id="connection-test" type="button">重新连接</button></div>
+          <div data-connection-page="message" id="connection-message" hidden></div>
+        </div>
+        <div class="setting-pager"><button id="connection-prev" type="button">上页</button><output id="connection-position"></output><button id="connection-next" type="button">下页</button></div>
+      </section>
       <section data-setting-pane="cache" hidden><button id="clear-cache" type="button">清除本机缓存</button></section>
     </div>
   </section>

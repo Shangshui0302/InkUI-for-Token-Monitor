@@ -65,3 +65,26 @@ p { margin: 0; }
 @media (max-width: 200px) { .accent-choice { font-size: 10px; gap: 3px; } .accent-dot { display: none; } }
 @media (max-height: 180px) { :root[data-theme="color"] .theme-preview { display: none; } }
 @media (max-width: 150px) { .settings-nav button { font-size: 9px; white-space: nowrap; } }
+
+/* Connection forms are button-paged, including status and long source addresses. */
+.connection-details { display: grid; grid-template-rows: minmax(0,1fr) auto; gap: 3px; }
+.detail-copy { min-height: 0; overflow: hidden; }
+#detail { height: 100%; margin: 0; overflow: hidden; overflow-wrap: anywhere; white-space: pre-wrap; }
+.setting-pager { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); align-items: center; gap: 3px; min-height: 0; }
+.setting-pager button { padding-left: 0; padding-right: 0; }
+.setting-pager output { min-width: 0; text-align: center; font-size: 12px; white-space: nowrap; }
+#native-connection { display: grid; grid-template-rows: auto minmax(0,1fr) auto; gap: 3px; }
+.connection-sources, .connection-actions { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 3px; }
+.connection-sources button, .connection-actions button { padding-left: 1px; padding-right: 1px; }
+#connection-pages { min-height: 0; overflow: hidden; }
+#connection-pages > div { min-height: 0; height: 100%; overflow: hidden; }
+#connection-pages input { max-height: 100%; }
+.secret-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 3px; align-content: start; }
+#connection-message { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-wrap; }
+@media (max-height: 220px) {
+  #native-connection, .connection-details { gap: 2px; }
+  #connection-message { font-size: 11px; line-height: 1.2; }
+  .setting-pager output { font-size: 10px; }
+  .connection-actions button { font-size: 11px; }
+}
+@media (max-width: 200px) { .connection-actions button { font-size: 10px; } .secret-row button { padding-left: 3px; padding-right: 3px; } }

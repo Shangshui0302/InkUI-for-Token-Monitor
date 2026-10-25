@@ -25,3 +25,13 @@ __pycache__/
 # Local design and research references
 /reference/
 /output/playwright/
+
+# Standalone Android builds and private signing material
+/apps/android/.gradle/
+/apps/android/build/
+/apps/android/app/build/
+/apps/android/local.properties
+/apps/android/keystore.properties
+/output/android/
+*.keystore
+*.jks
