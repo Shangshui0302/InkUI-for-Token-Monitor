@@ -16,7 +16,7 @@ final class NativePolicy {
     static final int MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
     static final Set<String> ASSETS = immutableSet("/index.html", "/styles.css", "/themes.css",
             "/dashboard.css", "/app.js", "/model.mjs", "/dashboard-model.mjs",
-            "/dashboard.js", "/theme.mjs", "/connection.mjs", "/transport.mjs");
+            "/dashboard.js", "/theme.mjs", "/connection.mjs", "/transport.mjs", "/charts.mjs");
     static final Set<String> ROUTES = immutableSet("/api/stats", "/api/history", "/api/session-archive");
 
     private static Set<String> immutableSet(String... values) {

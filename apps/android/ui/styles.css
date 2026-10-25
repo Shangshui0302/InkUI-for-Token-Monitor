@@ -22,7 +22,7 @@ p { margin: 0; }
 .period-buttons button { min-width: 38px; background: var(--panel); }
 .period-buttons button[aria-pressed="true"] { background: var(--accent-soft); }
 .top-actions button { border-color: var(--soft-line); }
-#navigation { display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); gap: 4px; }
+#navigation { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 4px; }
 #navigation button { padding-left: 0; padding-right: 0; border-color: var(--soft-line); background: var(--panel); }
 #navigation button[aria-current="page"] { background: var(--accent-soft); border-color: var(--accent); border-bottom-width: 3px; padding-bottom: 1px; }
 #dashboard { min-width: 0; min-height: 0; overflow: hidden; position: relative; }
@@ -62,6 +62,12 @@ p { margin: 0; }
 @media (max-height: 220px) { .accent-options { gap: 3px; margin-top: 3px; } }
 @media (max-width: 200px) { .accent-choice { font-size: 10px; gap: 3px; } .accent-dot { display: none; } }
 @media (max-height: 180px) { :root[data-theme="color"] .theme-preview { display: none; } }
+@media (max-height: 180px) {
+  :root { --control-height: 18px; font-size: 11px; }
+  button { padding-top: 2px; padding-bottom: 2px; }
+  #app { gap: 2px; }
+  .page-controls { padding-top: 1px; }
+}
 @media (max-width: 150px) { .settings-nav button { font-size: 9px; white-space: nowrap; } }
 
 /* Connection forms are button-paged, including status and long source addresses. */

@@ -16,7 +16,7 @@ def einkAssets = tasks.register('stageEinkAssets', Sync) {
     from('../ui') {
         include 'index.html', 'styles.css', 'themes.css', 'dashboard.css', 'app.js',
                 'model.mjs', 'dashboard-model.mjs', 'dashboard.js', 'theme.mjs',
-                'connection.mjs', 'transport.mjs'
+                'connection.mjs', 'transport.mjs', 'charts.mjs'
     }
     into layout.buildDirectory.dir('generated/einkAssets')
 }
