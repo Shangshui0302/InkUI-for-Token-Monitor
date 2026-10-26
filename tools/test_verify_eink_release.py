@@ -7,6 +7,7 @@ from pathlib import Path
 import struct
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 spec = importlib.util.spec_from_file_location("release_gate", Path(__file__).with_name("verify-eink-release.py"))
@@ -152,6 +153,41 @@ class ReleaseGateTest(unittest.TestCase):
                                  (valid + "\nSigner #2 certificate SHA-256 digest: " + cert, cert), ("", cert)):
             with self.subTest(output=output, expected=expected), self.assertRaises(gate.VerificationError):
                 gate.verify_signature_output(output, expected)
+
+    def test_default_apksigner_is_pinned_with_newer_sdk_packages_present(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sdk = Path(directory)
+            for version in ("36.0.0", "37.0.0"):
+                jar = sdk / "build-tools" / version / "lib/apksigner.jar"
+                jar.parent.mkdir(parents=True)
+                jar.touch()
+            with patch.dict(gate.os.environ, {"ANDROID_HOME": str(sdk)}, clear=True):
+                self.assertEqual(gate.apksigner_jar(), sdk / "build-tools/36.0.0/lib/apksigner.jar")
+
+    def test_missing_pinned_apksigner_never_falls_back_to_newer(self):
+        with tempfile.TemporaryDirectory() as directory:
+            sdk = Path(directory)
+            newer = sdk / "build-tools/37.0.0/lib/apksigner.jar"
+            newer.parent.mkdir(parents=True)
+            newer.touch()
+            with patch.dict(gate.os.environ, {"ANDROID_SDK_ROOT": str(sdk)}, clear=True):
+                with self.assertRaisesRegex(gate.VerificationError, "36.0.0"):
+                    gate.apksigner_jar()
+                self.assertEqual(gate.apksigner_jar(str(newer)), newer)
+
+    def test_signature_diagnostics_show_only_bounded_labels_and_match_count(self):
+        output = ("Verified using v2 scheme (APK Signature Scheme v2): true\n"
+                  "V2 Signer: certificate DN: CN=private-diagnostic-value\n"
+                  "V2 Signer: certificate SHA-256 digest: " + "ab" * 32 + "\n"
+                  "CN=untrusted-prefix certificate SHA-256 digest: " + "cd" * 32)
+        with self.assertRaises(gate.VerificationError) as failure:
+            gate.verify_signature_output(output)
+        message = str(failure.exception)
+        self.assertIn("matches=0", message)
+        self.assertIn("V2 Signer:", message)
+        self.assertIn("unrecognized", message)
+        for value in ("private-diagnostic-value", "untrusted-prefix", "ab" * 32, "cd" * 32):
+            self.assertNotIn(value, message)
 
 
 if __name__ == "__main__":

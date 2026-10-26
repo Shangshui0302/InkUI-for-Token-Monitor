@@ -42,6 +42,7 @@ jobs:
           name: android-checks-and-debug
           path: |
             apps/android/app/build/reports/
+            apps/android/app/build/outputs/apk/
             output/android/*.apk
             output/android/*.sha256
           if-no-files-found: warn

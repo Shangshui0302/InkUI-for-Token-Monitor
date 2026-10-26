@@ -205,7 +205,27 @@ def verify_signature_output(output, expected_cert=None):
         raise VerificationError("APK must have a valid v2 signature")
     signers = re.findall(r"Signer #\d+ certificate SHA-256 digest:\s*([0-9a-fA-F:]+)", output)
     if len(signers) != 1:
-        raise VerificationError("Expected exactly one APK signing certificate")
+        # Diagnostic labels only: never print a DN, digest, or arbitrary prefix
+        # from tool output. These additional formats remain rejected by the gate.
+        labels = []
+        for line in output.splitlines():
+            if " certificate SHA-256 digest:" not in line:
+                continue
+            prefix = line.split(" certificate SHA-256 digest:", 1)[0]
+            if re.fullmatch(r"Signer #\d+", prefix):
+                label = "numbered-signer"
+            elif re.fullmatch(r"Signer \(minSdkVersion=\d+(?: \(dev release=true\))?, maxSdkVersion=\d+\)", prefix):
+                label = "SDK-range-signer"
+            elif prefix in ("V1 Signer:", "V2 Signer:", "V3.0 Signer:", "V3.1 Signer:", "V4 Signer:"):
+                label = prefix
+            elif prefix == "Source Stamp Signer":
+                label = "source-stamp-signer"
+            else:
+                label = "unrecognized"
+            if label not in labels and len(labels) < 8:
+                labels.append(label)
+        raise VerificationError("Expected exactly one APK signing certificate "
+                                f"(matches={len(signers)}; certificate-labels={labels!r})")
     cert = fingerprint(signers[0])
     if expected_cert is not None and cert != fingerprint(expected_cert):
         raise VerificationError("APK certificate differs from the expected release certificate")
@@ -219,10 +239,13 @@ def apksigner_jar(explicit=None):
             raise VerificationError("Missing --apksigner-jar")
         return jar
     sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
-    jars = list(Path(sdk).glob("build-tools/*/lib/apksigner.jar")) if sdk else []
-    if not jars:
-        raise VerificationError("Set ANDROID_HOME or --apksigner-jar to existing SDK Build Tools")
-    return max(jars, key=lambda path: tuple(int(n) for n in re.findall(r"\d+", path.parent.parent.name)))
+    # Match this project's pinned Build Tools rather than a hosted runner's
+    # unrelated newer SDK packages; apksigner's text format is versioned too.
+    jar = Path(sdk) / "build-tools/36.0.0/lib/apksigner.jar" if sdk else None
+    if jar is None or not jar.is_file():
+        raise VerificationError("SDK Build Tools 36.0.0 apksigner.jar is required; "
+                                "set ANDROID_HOME or an explicit --apksigner-jar")
+    return jar
 
 
 def verify_apk(apk_path, repo, variant, tag=None, previous_code=None, expected_cert=None, signer_jar=None):

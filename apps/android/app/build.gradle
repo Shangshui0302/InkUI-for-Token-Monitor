@@ -27,6 +27,7 @@ def einkAssets = tasks.register('stageEinkAssets', Sync) {
 android {
     namespace 'dev.tokenmonitor.eink'
     compileSdk 36
+    buildToolsVersion '36.0.0'
     defaultConfig {
         applicationId 'dev.tokenmonitor.eink'
         minSdk 29
