@@ -79,31 +79,6 @@ export function projectDashboardStats(raw) {
     projectsIncomplete: raw.projectsIncomplete === true, limits
   };
 }
-// Archived rows describe retained cumulative usage on one device. Their activity
-// flags are deliberately reset; only a matching fresh Hub row may revive them.
-export function projectArchiveForCache(raw) {
-  if (!object(raw) || typeof raw.available !== 'boolean' || !object(raw.sessions)) throw new Error('会话归档数据格式不正确');
-  return {
-    available: raw.available,
-    scope: 'local-device', source: 'token-monitor-archive',
-    capturedAt: string(raw.capturedAt),
-    sessions: raw.available ? recordMap(raw.sessions, session => ({ ...sessionProjection(session), archived: true })) : {}
-  };
-}
-function cumulativeSessions(stats, archive) {
-  const combined = { ...stats.periods.allTime.sessions };
-  if (!archive?.available) return combined;
-  const live = { ...stats.periods.today.sessions, ...stats.periods.month.sessions };
-  const activityFields = ['lastUsedAt', 'turnEnded', 'archived', 'deleted', 'sourceDeleted', 'contextTokens', 'contextWindow'];
-  for (const [key, session] of Object.entries(archive.sessions)) {
-    if (Object.prototype.hasOwnProperty.call(combined, key)) continue;
-    combined[key] = { ...session, archived: true };
-    if (Object.prototype.hasOwnProperty.call(live, key)) {
-      for (const field of activityFields) combined[key][field] = live[key][field];
-    }
-  }
-  return combined;
-}
 function summaryView(period) {
   const result = pickNumbers(period, numericFields.filter(key => !key.startsWith('timed')));
   const duration = number(period.timedDurationMs);
@@ -166,14 +141,12 @@ function historyView(stats, history, now) {
     peakDayTokens: Math.max(value.summary.peakDayTokens || 0, maxTokens)
   }, available: true, source };
 }
-export function dashboardView(raw, history = null, period = 'today', now = Date.now(), archive = null) {
+export function dashboardView(raw, history = null, period = 'today', now = Date.now()) {
   if (!['today', 'month', 'allTime'].includes(period)) throw new Error('未知用量时段');
   const stats = projectDashboardStats(raw);
   const value = stats.periods[period];
   const summary = summaryView(value);
-  const retained = archive ? projectArchiveForCache(archive) : null;
-  const sessionSource = period === 'allTime' ? cumulativeSessions(stats, retained) : value.sessions;
-  const sessions = sessionsView(sessionSource, now);
+  const sessions = sessionsView(value.sessions, now);
   const liveSource = { ...stats.periods.today.sessions, ...stats.periods.month.sessions };
   const recent = sessionsView(liveSource, now);
   const projects = Object.values(value.projects).map(p => ({ name: p.label || '未分类', tokens: p.tokens, costUsd: p.costUsd,
@@ -188,8 +161,6 @@ export function dashboardView(raw, history = null, period = 'today', now = Date.
     sessions, runningSessions: recent.filter(s => s.state === 'running'),
     recentSessions: recent.filter((s, i) => i < 5 || s.state === 'running'),
     sessionsUnavailable: period === 'allTime' && sessions.length === 0,
-    sessionsScope: period === 'allTime' && retained?.available && Object.keys(retained.sessions).some(key => !Object.prototype.hasOwnProperty.call(value.sessions, key)) ? 'local-archive' : 'hub',
-    archiveCapturedAt: retained?.capturedAt || null,
     sessionsIncomplete: omitted(stats.sessionDetailsOmitted, period) || value.sessionDetailsOmitted,
     projectsIncomplete: stats.projectsIncomplete || omitted(stats.periodProjectsOmitted, period) || value.projectsIncomplete || value.periodProjectsOmitted,
     history: historyView(stats, history, now)

@@ -16,7 +16,7 @@ def einkAssets = tasks.register('stageEinkAssets', Sync) {
     from('../ui') {
         include 'index.html', 'styles.css', 'themes.css', 'dashboard.css', 'app.js',
                 'model.mjs', 'dashboard-model.mjs', 'dashboard.js', 'theme.mjs',
-                'connection.mjs', 'transport.mjs', 'charts.mjs', 'quota-presentation.mjs', 'quota-layout.mjs', 'gestures.mjs', 'display.mjs', 'icons.mjs', 'device-status.mjs'
+                'connection.mjs', 'connection-recovery.mjs', 'transport.mjs', 'charts.mjs', 'quota-presentation.mjs', 'quota-layout.mjs', 'provider-order.mjs', 'gestures.mjs', 'display.mjs', 'icons.mjs', 'device-status.mjs', 'settings.css', 'settings.js', 'settings-connection.mjs'
     }
     into layout.buildDirectory.dir('generated/einkAssets')
 }
@@ -28,8 +28,10 @@ android {
         applicationId 'dev.tokenmonitor.eink'
         minSdk 29
         targetSdk 36
-        versionCode 5
-        versionName '1.2.0'
+        // Keep the planned release name during development; only new distributed
+        // builds advance versionCode. Do not bump SemVer for each UI iteration.
+        versionCode 12
+        versionName '1.0.0'
     }
     sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/einkAssets'))
     compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
@@ -57,10 +59,16 @@ tasks.named('preBuild').configure { dependsOn einkAssets }
 
 // Pure Java checks run without Android or a test dependency.
 tasks.register('checkNativePolicy', JavaExec) {
-    dependsOn 'compileDebugUnitTestJavaWithJavac'
+    dependsOn 'compileDebugUnitTestJavaWithJavac', einkAssets
     classpath = files(layout.buildDirectory.dir('intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes'),
                       layout.buildDirectory.dir('intermediates/javac/debug/compileDebugJavaWithJavac/classes'))
     mainClass = 'dev.tokenmonitor.eink.NativePolicyTest'
+    args layout.buildDirectory.dir('generated/einkAssets').get().asFile.absolutePath
+}
+
+// Every APK assembly must verify the same resource boundary used by WebView.
+tasks.matching { it.name in ['assembleDebug', 'assembleRelease'] }.configureEach {
+    dependsOn 'checkNativePolicy'
 }
 
 tasks.register('checkDisplayRefresh', JavaExec) {
@@ -82,4 +90,13 @@ tasks.register('checkConnectionTest', JavaExec) {
     classpath = files(layout.buildDirectory.dir('intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes'),
                       layout.buildDirectory.dir('intermediates/javac/debug/compileDebugJavaWithJavac/classes'))
     mainClass = 'dev.tokenmonitor.eink.ConnectionTestControllerTest'
+}
+
+// Synthetic migration lifecycle; Android classes are linked, never executed.
+tasks.register('checkConnectionStore', JavaExec) {
+    dependsOn 'compileDebugUnitTestJavaWithJavac'
+    classpath = files(layout.buildDirectory.dir('intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes'),
+                      layout.buildDirectory.dir('intermediates/javac/debug/compileDebugJavaWithJavac/classes'),
+                      android.bootClasspath)
+    mainClass = 'dev.tokenmonitor.eink.ConnectionStoreMigrationTest'
 }

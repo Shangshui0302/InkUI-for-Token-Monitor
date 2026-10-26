@@ -2,10 +2,29 @@ package dev.tokenmonitor.eink;
 
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.HashSet;
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Stream;
 
 /** Security boundaries exercised without an emulator or Android framework mocks. */
 public final class NativePolicyTest {
     public static void main(String[] args) throws Exception {
+        if (args.length != 1) throw new AssertionError("Pass the staged UI assets directory");
+        Path assetsRoot = Paths.get(args[0]);
+        Set<String> bundled = new HashSet<>();
+        try (Stream<Path> paths = Files.walk(assetsRoot)) {
+            paths.filter(Files::isRegularFile).forEach(path ->
+                    bundled.add("/" + assetsRoot.relativize(path).toString().replace('\\', '/')));
+        }
+        if (!bundled.equals(NativePolicy.ASSETS))
+            throw new AssertionError("Bundled UI assets differ from native allowlist: " + bundled + " vs " + NativePolicy.ASSETS);
+        System.out.println("Bundled UI asset allowlist matches " + bundled.size() + " files");
+        if (!NativePolicy.ROUTES.equals(new HashSet<>(Arrays.asList("/api/stats", "/api/history"))))
+            throw new AssertionError("Only Hub stats and history routes are allowed");
         equal("http://192.168.1.7:18787", NativePolicy.normalizeOrigin("http://192.168.1.7:18787/"));
         equal("https://example.org", NativePolicy.normalizeOrigin("HTTPS://EXAMPLE.ORG:443"));
         equal("http://[::1]:18787", NativePolicy.normalizeOrigin("http://[::1]:18787"));

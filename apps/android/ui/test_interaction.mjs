@@ -39,3 +39,29 @@ test('hidden and canceled work never refreshes the panel; old APK bridge remains
   let callback; const legacy = createDisplayRefresh({}, () => false, fn => { callback = fn; return 1; }, () => {});
   legacy.request('page'); assert.doesNotThrow(() => callback());
 });
+
+test('canceled frame callbacks cannot consume a newer refresh and invalid reasons do not schedule', () => {
+  const calls = [], frames = [];
+  const refresh = createDisplayRefresh({ requestDisplayRefresh: reason => calls.push(reason) }, () => false,
+    fn => { frames.push(fn); return frames.length; }, () => {});
+  for (const reason of ['constructor', '__proto__', 'toString', 'unknown', null]) refresh.request(reason);
+  assert.equal(frames.length, 0);
+  refresh.request('full');
+  refresh.cancel();
+  refresh.request('content');
+  frames[0]();
+  assert.deepEqual(calls, []);
+  frames[1]();
+  assert.deepEqual(calls, ['content']);
+});
+
+test('a failing old bridge does not block subsequent visible refresh requests', () => {
+  let callback, attempts = 0;
+  const refresh = createDisplayRefresh({ requestDisplayRefresh() { attempts++; throw new Error('Unavailable'); } },
+    () => false, fn => { callback = fn; return attempts + 1; }, () => {});
+  refresh.request('page');
+  assert.doesNotThrow(() => callback());
+  refresh.request('content');
+  assert.doesNotThrow(() => callback());
+  assert.equal(attempts, 2);
+});

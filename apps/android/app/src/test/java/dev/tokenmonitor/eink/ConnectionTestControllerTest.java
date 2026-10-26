@@ -34,11 +34,20 @@ public final class ConnectionTestControllerTest {
             equal("", hub.getRequestProperty("Cookie")); equal("", hub.getRequestProperty("Cookie2"));
             check(!hub.getInstanceFollowRedirects() && !hub.getUseCaches(), "request policy");
             check(result.latencyMs >= 0, "latency");
-            FakeConnection archive = test.add(200);
-            test.start("two", "archive", "https://archive", "");
-            check(test.result().ok, "archive success");
-            equal("https://archive/api/session-archive", test.opened.take());
-            check(archive.getRequestProperty("Authorization") == null, "no empty bearer");
+            FakeConnection noSecret = test.add(200);
+            test.start("two", "hub", "https://candidate", "");
+            check(test.result().ok, "hub without secret succeeds");
+            equal("https://candidate/api/stats", test.opened.take());
+            check(noSecret.getRequestProperty("Authorization") == null, "no empty bearer");
+        }
+        for (String source : new String[]{"archive", "other", "", null}) {
+            try (Harness test = new Harness(1000)) {
+                test.start("invalid-source", source, "https://must-not-connect", "must-not-leak");
+                ConnectionTestController.Result result = test.result();
+                equal("invalid_connection", result.error);
+                equal("hub", result.source); equal("", result.origin);
+                check(test.opened.isEmpty(), "non-Hub source cannot connect");
+            }
         }
         for (int status : new int[]{301, 302, 307, 308, 401, 403, 404, 500}) {
             try (Harness test = new Harness(1000)) {
@@ -106,7 +115,7 @@ public final class ConnectionTestControllerTest {
             test.start("old", "hub", "http://candidate", "");
             check(blocked.entered.await(1, TimeUnit.SECONDS), "entered replaced request");
             test.add(200);
-            test.start("new", "archive", "http://archive", "");
+            test.start("new", "hub", "http://replacement", "");
             ConnectionTestController.Result old = test.result();
             equal("old", old.id); equal("cancelled", old.error);
             blocked.release.countDown();

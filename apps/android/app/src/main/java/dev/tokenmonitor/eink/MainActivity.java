@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** The WebView can read packaged UI and three native GET routes only. */
+/** The WebView can read packaged UI and two native GET routes only. */
 public final class MainActivity extends Activity {
     private WebView webView;
     private ConnectionStore connections;
@@ -41,7 +41,7 @@ public final class MainActivity extends Activity {
         super.onCreate(state);
         connections = new ConnectionStore(this);
         connectionTests = new ConnectionTestController((body, source) -> {
-            validateResponse(body, "archive".equals(source) ? "/api/session-archive" : "/api/stats");
+            validateResponse(body, "/api/stats");
         }, MainActivity::classifyConnectionFailure);
         webView = new WebView(this);
         displayRefresh = new DisplayRefreshController(webView);
@@ -87,6 +87,14 @@ public final class MainActivity extends Activity {
             try { return connections.snapshot().publicJson().toString(); }
             catch (Exception ignored) { return "{}"; }
         }
+        @JavascriptInterface public String getAppInfo() {
+            try {
+                JSONObject result = new JSONObject();
+                result.put("versionName", BuildConfig.VERSION_NAME);
+                result.put("versionCode", BuildConfig.VERSION_CODE);
+                return result.toString();
+            } catch (Exception ignored) { return "{}"; }
+        }
         @JavascriptInterface public String saveConnection(String json) { return connections.save(json); }
         @JavascriptInterface public void testConnection(String payloadJson, String requestId) {
             if (requestId == null || requestId.length() > 64 || !requestId.matches("[A-Za-z0-9_-]{1,64}")) return;
@@ -130,13 +138,10 @@ public final class MainActivity extends Activity {
     private WebResourceResponse proxy(String path) {
         ConnectionStore.Config config = connections.snapshot();
         if (!foreground) return error(503, "app_background");
-        boolean archive = path.equals("/api/session-archive");
-        String origin = archive ? config.archiveUrl : config.hubUrl;
-        String secret = archive ? config.archiveSecret : config.hubSecret;
-        if (origin.isEmpty()) {
-            if (!archive) return error(503, "hub_unconfigured");
-            return json(200, "{\"available\":false,\"scope\":\"local-device\",\"source\":\"token-monitor-archive\",\"sessions\":{}}");
-        }
+        if (!NativePolicy.ROUTES.contains(path)) return error(404, "not_found");
+        String origin = config.hubUrl;
+        String secret = config.hubSecret;
+        if (origin.isEmpty()) return error(503, "hub_unconfigured");
         HttpURLConnection upstream = null;
         WebResourceResponse result;
         try {
@@ -154,8 +159,8 @@ public final class MainActivity extends Activity {
             int status = upstream.getResponseCode();
             // WebResourceResponse cannot represent redirects; never expose Location or a remote body.
             if (status >= 300 && status <= 399) result = error(502, "upstream_redirect_blocked");
-            else if (status == 401 || status == 403) result = error(502, archive ? "archive_unauthorized" : "hub_unauthorized");
-            else if (status != 200) result = error(502, archive ? "archive_http_error" : "hub_http_error");
+            else if (status == 401 || status == 403) result = error(502, "hub_unauthorized");
+            else if (status != 200) result = error(502, "hub_http_error");
             else if (upstream.getContentLengthLong() > NativePolicy.MAX_RESPONSE_BYTES) result = error(502, "response_too_large");
             else {
                 byte[] body;
@@ -164,7 +169,8 @@ public final class MainActivity extends Activity {
                 result = json(200, data.toString());
             }
         } catch (org.json.JSONException | IllegalArgumentException ignored) { result = error(502, "invalid_response"); }
-        catch (Exception ignored) { result = error(503, archive ? "archive_unavailable" : "hub_unavailable"); }
+        catch (Exception failure) { result = error(503, "response_limit".equals(failure.getMessage())
+                ? "response_too_large" : "hub_" + classifyConnectionFailure(failure)); }
         finally {
             if (upstream != null) { activeRequests.remove(upstream); upstream.disconnect(); }
         }
@@ -179,8 +185,6 @@ public final class MainActivity extends Activity {
                 || data.optJSONObject("limits") == null || data.getJSONObject("limits").optJSONArray("providers") == null)) throw new IllegalArgumentException();
         if (path.equals("/api/history") && (data.optJSONArray("daily") == null
                 || data.optJSONArray("monthly") == null || data.optJSONObject("summary") == null)) throw new IllegalArgumentException();
-        if (path.equals("/api/session-archive") && (!(data.opt("available") instanceof Boolean)
-                || data.optJSONObject("sessions") == null)) throw new IllegalArgumentException();
         return data;
     }
 
@@ -202,15 +206,13 @@ public final class MainActivity extends Activity {
             if (input == null || input.length() > 24576) throw new IllegalArgumentException();
             JSONObject data = new JSONObject(input);
             Object selected = data.opt("source");
-            if (!(selected instanceof String) || !(selected.equals("hub") || selected.equals("archive"))) throw new IllegalArgumentException();
-            source = (String) selected;
-            boolean archive = source.equals("archive");
-            Object selectedUrl = data.opt(archive ? "archiveUrl" : "hubUrl");
+            if (!"hub".equals(selected)) throw new IllegalArgumentException();
+            Object selectedUrl = data.opt("hubUrl");
             if (!(selectedUrl instanceof String)) throw new IllegalArgumentException();
             origin = NativePolicy.normalizeOrigin((String) selectedUrl);
             // Parse through the same origin/credential policy as saving, without changing the store.
             ConnectionStore.Config candidate = connections.candidate(input);
-            String secret = archive ? candidate.archiveSecret : candidate.hubSecret;
+            String secret = candidate.hubSecret;
             if (!foreground) return;
             connectionTests.start(requestId, source, origin, secret,
                     () -> foreground && connections.isCurrent(candidate),

@@ -8,6 +8,7 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.net.NetworkRequest;
+import android.net.LinkProperties;
 import android.os.BatteryManager;
 import android.os.Build;
 import android.os.Handler;
@@ -24,6 +25,7 @@ final class DeviceStatusController {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Consumer<String> listener;
     private final Map<Network, DeviceStatus.Link> links = new HashMap<>();
+    private final Map<Network, LinkProperties> routes = new HashMap<>();
     private volatile DeviceStatus snapshot;
     private DeviceStatus lastSent;
     private boolean active;
@@ -35,6 +37,7 @@ final class DeviceStatusController {
     private Boolean charging;
     private ConnectivityManager.NetworkCallback networkCallback;
     private long generation;
+    private long networkRevision;
     private final Runnable minute = () -> { if (active) { publish(); scheduleMinute(); } };
     private final BroadcastReceiver receiver = new BroadcastReceiver() {
         @Override public void onReceive(Context ignored, Intent intent) {
@@ -82,7 +85,9 @@ final class DeviceStatusController {
                 @Override public void onAvailable(Network network) {
                     if (!current()) return;
                     // Capabilities follow onAvailable. Never query synchronous network APIs here.
-                    if (!links.containsKey(network)) links.put(network, DeviceStatus.Link.UNKNOWN);
+                    if (!links.containsKey(network)) {
+                        links.put(network, DeviceStatus.Link.UNKNOWN); networkRevision++;
+                    }
                 }
                 @Override public void onCapabilitiesChanged(Network network, NetworkCapabilities capabilities) {
                     if (!current()) return;
@@ -90,10 +95,16 @@ final class DeviceStatusController {
                     links.put(network, describe(capabilities));
                     publish();
                 }
+                @Override public void onLinkPropertiesChanged(Network network, LinkProperties properties) {
+                    if (!current()) return;
+                    LinkProperties previous = routes.put(network, properties);
+                    if (!properties.equals(previous)) { networkRevision++; publish(); }
+                }
                 @Override public void onLost(Network network) {
                     if (!current()) return;
                     networkReadable = true;
-                    links.remove(network);
+                    if (links.remove(network) != null) networkRevision++;
+                    routes.remove(network);
                     publish();
                 }
             };
@@ -134,17 +145,23 @@ final class DeviceStatusController {
     }
 
     private void readNetworks() {
+        Map<Network, LinkProperties> previous = new HashMap<>(routes);
         links.clear();
+        routes.clear();
         networkReadable = false;
         if (connectivity == null) return;
         try {
             for (Network network : connectivity.getAllNetworks()) {
                 NetworkCapabilities capabilities = connectivity.getNetworkCapabilities(network);
-                if (capabilities == null || capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED))
+                if (capabilities == null || capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED)) {
                     links.put(network, describe(capabilities));
+                    LinkProperties properties = connectivity.getLinkProperties(network);
+                    if (properties != null) routes.put(network, properties);
+                }
             }
+            if (!routes.equals(previous)) networkRevision++;
             networkReadable = true;
-        } catch (RuntimeException ignored) { links.clear(); }
+        } catch (RuntimeException ignored) { links.clear(); routes.clear(); }
     }
 
     private static DeviceStatus.Link describe(NetworkCapabilities capabilities) {
@@ -157,7 +174,7 @@ final class DeviceStatusController {
 
     private void publish() {
         DeviceStatus value = new DeviceStatus(fullscreen, System.currentTimeMillis(), ZoneId.systemDefault(),
-                batteryPercent, charging, DeviceStatus.Link.select(links.values(), networkReadable));
+                batteryPercent, charging, DeviceStatus.Link.select(links.values(), networkReadable), networkRevision);
         snapshot = value;
         if (active && pageReady && !value.equals(lastSent)) { lastSent = value; listener.accept(value.toJson()); }
     }

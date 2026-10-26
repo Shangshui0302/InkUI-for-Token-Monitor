@@ -7,7 +7,8 @@ export function normalizeDeviceStatus(value) {
     batteryPercent: typeof v.batteryPercent === 'number' && Number.isFinite(v.batteryPercent) && v.batteryPercent >= 0 && v.batteryPercent <= 100 ? Math.round(v.batteryPercent) : null,
     charging: typeof v.charging === 'boolean' ? v.charging : null,
     network: networks.includes(v.network) ? v.network : 'unknown',
-    networkValidated: typeof v.networkValidated === 'boolean' ? v.networkValidated : null
+    networkValidated: typeof v.networkValidated === 'boolean' ? v.networkValidated : null,
+    networkRevision: typeof v.networkRevision === 'string' && /^\d{1,20}$/.test(v.networkRevision) ? v.networkRevision : ''
   };
 }
 export function networkLabel(status) {

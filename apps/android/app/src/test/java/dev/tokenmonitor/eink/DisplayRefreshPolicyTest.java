@@ -22,9 +22,9 @@ public final class DisplayRefreshPolicyTest {
         equal(DisplayRefreshPolicy.Update.NONE, policy.take(2000));
         for (int change = 0; change < 6; change++) policy.request("content", 2000 + change);
         equal(DisplayRefreshPolicy.Update.PARTIAL, policy.take(2120));
-        // Repeated page updates can coalesce, but every real DOM transition still counts.
+        // Repeated page updates before the compositor fence produce one panel update.
         for (int page = 0; page < 5; page++) policy.request("page", 2400 + page);
-        equal(DisplayRefreshPolicy.Update.FULL, policy.take(2410));
+        equal(DisplayRefreshPolicy.Update.PARTIAL, policy.take(2410));
         policy.request("content", 2600);
         policy.request("full", 2610);
         equal(DisplayRefreshPolicy.Update.FULL, policy.take(2610));
@@ -46,11 +46,76 @@ public final class DisplayRefreshPolicyTest {
         check(!policy.isActive(), "Destroy is permanent");
         check(!policy.request("full", 7000), "No refresh after destroy");
         equal(DisplayRefreshPolicy.Update.NONE, policy.take(8000));
+        coalescedAndCanceledPages();
+        staleVisualFences();
         contentRefreshBudget();
         mixedRefreshBudget();
         fullRefreshResetsBudget();
         OnyxDisplayBackendTest.main(args);
         System.out.println("Display refresh policy checks passed");
+    }
+
+    private static void coalescedAndCanceledPages() {
+        DisplayRefreshPolicy policy = new DisplayRefreshPolicy();
+        policy.resume(0);
+        equal(DisplayRefreshPolicy.Update.FULL, policy.take(0));
+        // Sixty notifications merged into one displayed page spend only one page credit.
+        for (int change = 0; change < 60; change++) policy.request("page", 200 + change);
+        equal(DisplayRefreshPolicy.Update.PARTIAL, policy.take(300));
+        for (int page = 2; page <= 6; page++) {
+            long now = page * 400L;
+            policy.request("page", now);
+            policy.request("content", now + 1);
+            equal(page == 6 ? DisplayRefreshPolicy.Update.FULL : DisplayRefreshPolicy.Update.PARTIAL,
+                    policy.take(now + 2));
+        }
+        // Pending work dropped by pause cannot consume a page or a partial credit.
+        for (int change = 0; change < 60; change++) policy.request("page", 3000 + change);
+        policy.pause();
+        check(!policy.hasPending(), "Canceled burst clears page intent");
+        policy.resume(4000);
+        equal(DisplayRefreshPolicy.Update.FULL, policy.take(4000));
+        policy.request("content", 4400);
+        equal(DisplayRefreshPolicy.Update.PARTIAL, policy.take(4520));
+        for (int page = 1; page <= 6; page++) {
+            long now = 4800 + page * 400L;
+            policy.request("page", now);
+            equal(page == 6 ? DisplayRefreshPolicy.Update.FULL : DisplayRefreshPolicy.Update.PARTIAL,
+                    policy.take(now));
+        }
+    }
+
+    private static void staleVisualFences() {
+        DisplayRefreshPolicy.VisualFence fence = new DisplayRefreshPolicy.VisualFence();
+        fence.resetRetries();
+        long first = fence.begin();
+        fence.cancel(); // pause, detach, or a newer DOM update
+        check(!fence.complete(first), "Canceled callback cannot consume pending work");
+        long second = fence.begin();
+        check(!fence.complete(first), "Old callback cannot consume a newer fence");
+        check(fence.isWaiting(), "Stale callback leaves the current fence waiting");
+        check(fence.complete(second), "Current callback releases its fence");
+        check(!fence.complete(second), "Duplicate callback cannot dispatch twice");
+        long timedOut = fence.begin();
+        check(fence.complete(timedOut), "Watchdog releases a stuck fence");
+        fence.cancel();
+        check(fence.retry(), "First timeout gets one retry");
+        check(!fence.isWaiting(), "Timed out fence does not block the next request");
+        check(!fence.complete(timedOut), "Late timed out callback is ignored");
+        long retry = fence.begin();
+        check(!fence.complete(timedOut), "Late callback cannot consume retry");
+        check(fence.complete(retry), "Fresh fence works after timeout");
+        check(!fence.retry(), "Second failure cannot create a polling loop");
+        check(!fence.retry(), "Synchronous exceptions cannot create a retry loop either");
+        fence.resetRetries(); // a real DOM request, attach, or resume
+        check(fence.retry(), "New visible event restores one retry");
+        check(!fence.retry(), "New event still has a finite retry budget");
+        // Waiting/timeout alone never calls take(), so it cannot consume a refresh budget.
+        DisplayRefreshPolicy policy = new DisplayRefreshPolicy();
+        policy.resume(0);
+        check(policy.hasPending(), "A lost fence retains full-refresh intent");
+        policy.request("page", 3000);
+        equal(DisplayRefreshPolicy.Update.FULL, policy.take(3000));
     }
 
     private static void contentRefreshBudget() {

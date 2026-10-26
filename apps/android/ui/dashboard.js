@@ -3,8 +3,9 @@ import { dashboardView } from './dashboard-model.mjs';
 import { heatLevel } from './theme.mjs';
 import { icon } from './icons.mjs';
 import { trendGeometry } from './charts.mjs';
-import { providerQuotaEntries, quotaPresentation, providerQuotaPairs, quotaWindowPairs, quotaAmount, quotaCompactNumber } from './quota-presentation.mjs';
+import { providerQuotaEntries, quotaPresentation, providerQuotaPairs, quotaWindowPairs, quotaAmount, quotaCompactNumber, quotaFigure } from './quota-presentation.mjs';
 import { planQuotaPages, planQuotaMetrics, QUOTA_DIAL_ASPECT } from './quota-layout.mjs';
+import { providerOrderIds, orderedProviderIndices, mergeProviderOrder, createProviderOrderStore } from './provider-order.mjs';
 
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const number = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
@@ -54,11 +55,15 @@ export function createDashboard(host, onDisplayChange = () => {}) {
   let providerKey = null, providerPicker = false;
   let drill = null, actions = [], pageCount = 1, currentIndex = 0;
   let quotaGeometry = null;
+  let orderStorage;
+  try { orderStorage = window.localStorage; } catch (_) { /* Saving reports unavailable storage. */ }
+  const orderStore = createProviderOrderStore(orderStorage);
+  let orderSource = '', savedOrder = [], orderEditor = null, orderFollow = null;
   const quotaTextMeasure = document.createElement('canvas').getContext('2d');
   const positions = {};
   let resizeFrame = 0;
   const shade = index => 'var(--heat-' + Math.max(3, 15 - index * 3) + ')';
-  function key() { return drill ? 'drill' : page + ':' + period + ':' + (page === 'details' ? detailKind : page === 'activity' ? activityKind : page === 'sessions' ? runningOnly : page === 'limits' ? (providerPicker ? 'providers' : 'windows:' + providerKey) : ''); }
+  function key() { return orderEditor ? 'provider-order' : drill ? 'drill' : page + ':' + period + ':' + (page === 'details' ? detailKind : page === 'activity' ? activityKind : page === 'sessions' ? runningOnly : page === 'limits' ? (providerPicker ? 'providers' : 'windows:' + providerKey) : ''); }
   function actionButton(label, fn, className = 'dash-tab') {
     const b = el('button', label, className); b.type = 'button';
     b.dataset.focusKey = key() + ':' + className + ':' + (label || '');
@@ -101,16 +106,92 @@ export function createDashboard(host, onDisplayChange = () => {}) {
   function quotaLayout(groups, width, height, font) {
     // Values and countdowns do not alter geometry. Reuse the packing while
     // paging or receiving unchanged field sets instead of re-solving it.
-    const signature = JSON.stringify([width, height, font, groups.map(g => [g.itemCount, g.hasIdentity, g.hasNote, g.hasAttachment, g.metricHeights])]);
-    if (!quotaGeometry || quotaGeometry.signature !== signature) quotaGeometry = { signature, plan: planQuotaPages(groups, { width, height, font }) };
+    const readingOrder = savedOrder.length > 0;
+    const signature = JSON.stringify([width, height, font, readingOrder, groups.map(g => [g.itemCount, g.hasIdentity, g.hasNote, g.hasAttachment, g.metricHeights])]);
+    if (!quotaGeometry || quotaGeometry.signature !== signature) quotaGeometry = { signature, plan: planQuotaPages(groups, { width, height, font, readingOrder }) };
     return quotaGeometry.plan;
   }
   function quotaBoundary(w, reading) {
     const relative = w && presentBoundary(w) ? resetIn(w.resetsAt) || w.resetDescription : '';
     return relative ? reading.boundary + ' ' + (relative === '待重置' && w.boundaryKind === 'expiry' ? '已到期' : relative === '待重置' && w.boundaryKind === 'mixed' ? '时间已到' : relative) : '';
   }
-  function quotaItems(surface, font) {
+  function orderedProviders() {
     const providers = normalizeStats(data.stats);
+    const raw = providers.map(p => data.stats.limits.providers[p.key]);
+    return orderedProviderIndices(raw, savedOrder).map(index => providers[index]);
+  }
+  function startProviderOrder() {
+    const defaults = normalizeStats(data.stats);
+    const ids = providerOrderIds(defaults.map(p => data.stats.limits.providers[p.key]));
+    const rows = defaults.map((p, index) => ({ p, id: ids[index] }));
+    const byKey = new Map(rows.map(row => [row.p.key, row]));
+    const ordered = orderedProviders().map(p => byKey.get(p.key));
+    // Indistinguishable upstream identities cannot have durable individual ranks.
+    orderEditor = { defaults: rows,
+      rows: ordered.filter(row => row.id).concat(ordered.filter(row => !row.id)),
+      active: null, reset: false, message: '' };
+    positions['provider-order'] = 0; render();
+    host.querySelector('#quota-order-cancel')?.focus({ preventScroll: true });
+  }
+  function closeProviderOrder() {
+    orderEditor = null; orderFollow = null; render();
+    host.querySelector('#quota-order-open')?.focus({ preventScroll: true });
+  }
+  function saveProviderOrder() {
+    const next = orderEditor.reset ? [] : mergeProviderOrder(savedOrder, orderEditor.rows.map(row => row.id));
+    const ok = orderEditor.reset ? orderStore.reset(orderSource) : orderStore.save(orderSource, next);
+    if (!ok) { orderEditor.message = '未能保存到本机，请重试'; render('content'); return; }
+    savedOrder = next;
+    // Return to the first quota page so the new priority is immediately visible.
+    orderEditor = null; orderFollow = null; providerPicker = false; providerKey = null;
+    positions[key()] = 0; render(); host.querySelector('#quota-provider-selector')?.focus({ preventScroll: true });
+  }
+  function moveProviderOrder(index, destination) {
+    const rows = orderEditor.rows, [moving] = rows.splice(index, 1);
+    rows.splice(destination, 0, moving);
+    // Editing after a default preview enters custom mode again. Ambiguous
+    // accounts remain together at the end, exactly as the saved view will show.
+    orderEditor.rows = rows.filter(row => row.id).concat(rows.filter(row => !row.id));
+    orderEditor.active = moving.id;
+    orderEditor.reset = false; orderEditor.message = '';
+    orderFollow = orderEditor.rows.indexOf(moving);
+    render('content');
+    host.querySelector('.dash-order-row[data-active=true] button:not(:disabled)')?.focus({ preventScroll: true });
+  }
+  function providerOrderRows(surface) {
+    const header = el('div', undefined, 'dash-order-header');
+    const cancel = actionButton('取消', closeProviderOrder, 'dash-order-control'); cancel.id = 'quota-order-cancel';
+    const title = el('strong', '服务商排序', 'dash-order-title');
+    const save = actionButton('保存', saveProviderOrder, 'dash-order-control dash-order-save'); save.id = 'quota-order-save';
+    header.append(cancel, title, save); surface.append(header);
+    if (orderEditor.message) {
+      const message = el('p', orderEditor.message, 'dash-order-message'); message.setAttribute('role', 'status'); surface.append(message);
+    }
+    const names = new Map(); orderEditor.rows.forEach(({ p }) => names.set(p.name, (names.get(p.name) || 0) + 1));
+    return orderEditor.rows.map(({ p, id }, index) => () => {
+      const row = el('div', undefined, 'dash-order-row'); row.dataset.orderIndex = index;
+      row.dataset.active = String(id !== null && orderEditor.active === id);
+      row.append(el('span', String(index + 1).padStart(2, '0'), 'dash-order-index'));
+      const identity = el('span', undefined, 'dash-order-identity'); identity.append(el('strong', p.name));
+      const account = p.account || p.accountEmail || p.accountName || (names.get(p.name) > 1 ? '账号 ' + (p.key + 1) : '');
+      if (account || !id) identity.append(el('span', !id ? '身份重复 · 按来源排序' : account, 'dash-secondary'));
+      identity.title = [p.name, account].filter(Boolean).join(' · '); row.append(identity);
+      const controls = el('span', undefined, 'dash-order-actions');
+      const title = [p.name, account].filter(Boolean).join(' · ');
+      const top = actionButton('置顶', () => moveProviderOrder(index, 0), 'dash-order-top');
+      top.disabled = index === 0 || !id; top.setAttribute('aria-label', title + ' · 置顶');
+      top.dataset.focusKey = 'order:' + id + ':top'; controls.append(top);
+      for (const [delta, name, label] of [[-1, 'chevron-up', '上移'], [1, 'chevron-down', '下移']]) {
+        const button = actionButton(undefined, () => moveProviderOrder(index, index + delta), 'dash-order-arrow');
+        button.append(icon(name)); button.setAttribute('aria-label', title + ' · ' + label); button.title = label;
+        button.dataset.focusKey = 'order:' + id + ':' + label;
+        button.disabled = !id || !orderEditor.rows[index + delta]?.id; controls.append(button);
+      }
+      row.append(controls); return row;
+    });
+  }
+  function quotaItems(surface, font) {
+    const providers = orderedProviders();
     if (providerKey !== null && !providers.some(p => p.key === providerKey)) providerKey = null;
     const selected = providers.find(p => p.key === providerKey);
     const nameCounts = new Map(); providers.forEach(p => nameCounts.set(p.name, (nameCounts.get(p.name) || 0) + 1));
@@ -132,6 +213,9 @@ export function createDashboard(host, onDisplayChange = () => {}) {
       const cancel = actionButton(undefined, () => { providerPicker = false; render(); host.querySelector('#quota-provider-selector')?.focus(); }, 'dash-picker-cancel');
       cancel.append(icon('arrow-left')); cancel.setAttribute('aria-label', '取消选择');
       controls.append(cancel);
+      const sort = actionButton('排序', startProviderOrder, 'dash-order-open');
+      sort.id = 'quota-order-open'; sort.disabled = providers.length < 2 || !orderSource;
+      controls.append(sort);
     }
     surface.append(controls);
     if (providerPicker) {
@@ -214,17 +298,15 @@ export function createDashboard(host, onDisplayChange = () => {}) {
         return (quotaTextMeasure ? quotaTextMeasure.measureText(text).width : text.length * size * .65) + Math.max(0, text.length - 1) * spacing;
       };
       metrics.style.gridTemplateColumns = 'repeat(' + (tail ? fragment.columns * tail : fragment.columns) + ',minmax(0,1fr))';
-      const cells = group.primary.slice(fragment.start, fragment.start + fragment.count).map(({ w, index }, localIndex) => {
+      const fragmentEntries = group.primary.slice(fragment.start, fragment.start + fragment.count);
+      const hasFooter = fragmentEntries.some(({ w }) => presentBoundary(w) || quotaPresentation(p, w).detail);
+      const cells = fragmentEntries.map(({ w, index }, localIndex) => {
         const reading = quotaPresentation(p, w), boundary = quotaBoundary(w, reading);
-        const symbol = { CNY: '¥', USD: '$', EUR: '€', GBP: '£', HKD: 'HK$' }[reading.unit];
-        const numericText = reading.text || (symbol || '') + (reading.unit === '%' ? count(reading.value) : quotaCompactNumber(reading.value));
-        const unit = reading.unit && !symbol && !reading.text ? reading.unit === 'CREDITS' ? '点' : reading.unit : '';
+        const { text: numericText, reserveText, unit } = quotaFigure(reading);
         const rowColumns = tail && localIndex >= fragment.count - tail ? tail : fragment.columns;
-        const valueRoom = fragment.metricHeight - 5 - font * .8 * 1.2 - (boundary || reading.detail ? font * .7 * 1.2 + 4 : 2);
+        const valueRoom = fragment.metricHeight - 5 - font * .8 * 1.2 - (hasFooter ? font * .7 * 1.2 + 4 : 2);
         return { w, index, reading, boundary, numericText, unit,
-          // Reserve at least three percentage digits so 9 -> 50 -> 100 does
-          // not resize the group. Longer decimal amounts keep their precision.
-          text: reading.unit === '%' && textWidth(numericText, 1, '500', -.055) < textWidth('100', 1, '500', -.055) ? '100' : numericText,
+          text: numericText, reserveText,
           type: reading.type, hasMeter: finite(reading.meter),
           width: (fragment.width - 16 - (rowColumns - 1) * 10) / rowColumns - 8,
           height: valueRoom - 1,
@@ -252,7 +334,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
         numeric.append(el('strong', numericText, 'dash-quota-number'));
         if (unit) numeric.append(el('span', unit, 'dash-quota-unit'));
         main.append(numeric); if (dialWidth) main.append(quotaDial(reading.meter)); item.append(main);
-        if (boundary || reading.detail) item.append(el('span', [boundary, reading.detail].filter(Boolean).join(' · '), 'dash-window-note'));
+        if (hasFooter) item.append(el('span', [boundary, reading.detail].filter(Boolean).join(' · ') || '\u00a0', 'dash-window-note'));
         metrics.append(item);
       });
       section.append(metrics);
@@ -303,7 +385,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
   }
   function sourcePairs() {
     const h = view.history;
-    return [['额度汇总时间', absoluteTime(data.stats.limits.updatedAt)], ['额度刷新周期', finite(data.stats.limits.refreshMs) ? count(data.stats.limits.refreshMs / 1000) + ' 秒' : '未提供'], ['用量采集', absoluteTime(data.stats.updatedAt)], ['用量读取', absoluteTime(context.receivedAt)], ['历史', h.source === 'full' ? '完整历史' : h.source === 'preview' ? '近30日预览，空白日期不代表无活动' : '未提供'], ['历史读取', absoluteTime(context.historyReceivedAt) + (context.historyCached ? ' · 缓存' : '')], ['历史错误', context.historyError || '无'], ['会话范围', view.sessionsScope === 'local-archive' ? '本机累计留存，不代表跨设备完整历史' : 'Hub 已提供的会话'], ['会话完整性', view.sessionsUnavailable ? '上游未提供累计会话列表' : view.sessionsIncomplete ? '上游省略部分会话' : '未标记缺省'], ['项目完整性', view.projectsIncomplete ? '上游省略部分项目' : '未标记缺省'], ['归档采集', absoluteTime(view.archiveCapturedAt)], ['归档读取', absoluteTime(context.archiveReceivedAt) + (context.archiveCached ? ' · 缓存' : '')], ['归档错误', context.archiveError || (data.archive && !data.archive.available ? '本机累计归档不可用' : '无')], ['费用口径', '按已知模型价格估算 USD；未定价 tokens 不计入费用；— 表示未提供。额度余额保留原币种。'], ['运行状态', '按最新观测和最近活动推断；上下文百分比表示已用。归档会话仅匹配新鲜 Hub 观测时显示活动状态。']];
+    return [['额度汇总时间', absoluteTime(data.stats.limits.updatedAt)], ['额度刷新周期', finite(data.stats.limits.refreshMs) ? count(data.stats.limits.refreshMs / 1000) + ' 秒' : '未提供'], ['用量采集', absoluteTime(data.stats.updatedAt)], ['用量读取', absoluteTime(context.receivedAt)], ['历史', h.source === 'full' ? '完整历史' : h.source === 'preview' ? '近30日预览，空白日期不代表无活动' : '未提供'], ['历史读取', absoluteTime(context.historyReceivedAt) + (context.historyCached ? ' · 缓存' : '')], ['历史错误', context.historyError || '无'], ['会话范围', 'Hub 已提供的会话'], ['会话完整性', view.sessionsUnavailable ? '上游未提供累计会话列表' : view.sessionsIncomplete ? '上游省略部分会话' : '未标记缺省'], ['项目完整性', view.projectsIncomplete ? '上游省略部分项目' : '未标记缺省'], ['费用口径', '按已知模型价格估算 USD；未定价 tokens 不计入费用；— 表示未提供。额度余额保留原币种。'], ['运行状态', '按 Hub 最新观测和最近活动推断；上下文百分比表示已用。已归档或删除的会话不显示活动状态。']];
   }
   function historySummaryPairs() {
     const h = view.history.summary;
@@ -351,6 +433,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
   }
   function render(reason = 'page') {
     const focused = host.contains(document.activeElement) ? document.activeElement : null;
+    host.closest('#app')?.toggleAttribute('data-provider-order', Boolean(orderEditor));
     actions = [];
     const surface = el('div', undefined, 'dash-surface');
     const width = host.clientWidth, height = host.clientHeight;
@@ -359,9 +442,10 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     surface.style.setProperty('--dash-font', font + 'px');
     surface.style.setProperty('--dash-row-height', (font * 2.7 + 4) + 'px');
     let rows = [], quotaGroups = [], chart = false, layout = 'rows';
-    if (!data) rows = [row('暂无用量快照', '—', '请用刷新按钮读取')];
+    if (orderEditor) { rows = providerOrderRows(surface); layout = 'ordering'; }
+    else if (!data) rows = [row('暂无用量快照', '—', '请用刷新按钮读取')];
     else {
-      view = dashboardView(data.stats, data.history, period, Date.now(), data.archive);
+      view = dashboardView(data.stats, data.history, period, Date.now());
       if (drill) {
         const controls = el('div', undefined, 'dash-controls');
         controls.append(actionButton('返回', () => { drill = null; render(); }), el('strong', drill.title, 'dash-caption')); surface.append(controls);
@@ -379,7 +463,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
         tabs(surface, [['all', '全部 ' + view.sessions.length], ['running', '运行中 ' + view.sessions.filter(s => s.state === 'running').length]], runningOnly ? 'running' : 'all', id => { runningOnly = id === 'running'; });
         if (cards) { const labels = el('div', undefined, 'dash-session-labels'); labels.append(el('span', '会话 / 模型'), el('span', 'Tokens / USD'), el('span', '上下文')); surface.append(labels); }
         rows = (runningOnly ? view.sessions.filter(s => s.state === 'running') : view.sessions).map(item => () => sessionItem(item, cards)); layout = cards ? 'session' : 'rows';
-        if (view.sessionsScope === 'local-archive' || view.sessionsIncomplete || view.sessionsUnavailable || context.archiveError) surface.append(actionButton(view.sessionsScope === 'local-archive' ? '本机累计 · 数据范围' : '数据范围', () => open('会话数据范围', sourcePairs()), 'dash-scope'));
+        if (view.sessionsIncomplete || view.sessionsUnavailable) surface.append(actionButton('数据范围', () => open('会话数据范围', sourcePairs()), 'dash-scope'));
       } else if (page === 'details') {
         tabs(surface, [['usage', '用量'], ['models', '模型'], ['clients', '工具'], ['projects', '项目'], ['devices', '设备'], ['source', '来源']], detailKind, id => { detailKind = id; });
         layout = cards ? 'metric' : 'rows';
@@ -404,9 +488,18 @@ export function createDashboard(host, onDisplayChange = () => {}) {
       }
     }
     const body=el('div',undefined,'dash-body'); surface.append(body);
-    if (page === 'limits' && !drill) {
+    if (page === 'limits' && !drill && !orderEditor) {
       body.id = 'quota-provider-options';
       if (providerPicker) { body.setAttribute('role', 'menu'); body.setAttribute('aria-labelledby', 'quota-provider-selector'); }
+    }
+    if (orderEditor) {
+      const footer = el('div', undefined, 'dash-order-footer');
+      const reset = actionButton('恢复默认', () => {
+        orderEditor.rows = orderEditor.defaults.slice(); orderEditor.reset = true;
+        orderEditor.active = null; orderEditor.message = '已恢复默认，保存后生效';
+        positions[key()] = 0; render('content');
+      }, 'dash-order-control'); reset.id = 'quota-order-reset';
+      footer.append(reset, el('span', orderEditor.rows.length + ' 个账号', 'dash-secondary')); surface.append(footer);
     }
     // Measure the next tree without detaching the current one. An unchanged
     // snapshot must not blur the user's selected control or redraw the panel.
@@ -416,10 +509,11 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     const available=Math.max(1,body.clientHeight);
     const quotaPlan = layout === 'quota' && quotaGroups.length ? quotaLayout(quotaGroups, width, available, font) : null;
     if (layout === 'quota' && (!quotaPlan || quotaPlan.compact)) layout = 'rows';
-    const columns=layout==='rows'||layout==='session'||layout==='providers'?1:Math.max(1,Math.min(4,Math.floor((width+16)/(layout==='quota'?280:210))));
+    const columns=['rows','session','providers','ordering'].includes(layout)?1:Math.max(1,Math.min(4,Math.floor((width+16)/(layout==='quota'?280:210))));
     const rowHeight=font*2.7+4;
-    const minimum=layout==='quota'?font*7.8+14:layout==='session'?font*2.4+8:layout==='metric'?font*4.6+12:layout==='providers'?font*3.1+8:rowHeight;
+    const minimum=layout==='ordering'?Math.max(40,font*3.3+8):layout==='quota'?font*7.8+14:layout==='session'?font*2.4+8:layout==='metric'?font*4.6+12:layout==='providers'?font*3.1+8:rowHeight;
     const perColumn=Math.max(1,Math.floor((available+6)/(minimum+6))), size=columns*perColumn;
+    if (orderEditor && orderFollow !== null) { positions[key()] = Math.floor(orderFollow / size); orderFollow = null; }
     if (layout === 'quota') {
       pageCount = quotaPlan.pages.length; currentIndex = Math.max(0, Math.min(positions[key()] || 0, pageCount - 1)); positions[key()] = currentIndex;
       body.dataset.layout = 'quota';
@@ -440,7 +534,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     else if (previous) {
       previous.remove();
       if (focused && !host.closest('[inert]')) {
-        const matches = [...surface.querySelectorAll('button')].filter(node =>
+        const matches = [...surface.querySelectorAll('button:not(:disabled)')].filter(node =>
           focused.id ? node.id === focused.id : node.dataset.focusKey === focused.dataset.focusKey);
         // Ambiguous identities or removed entries return to page controls,
         // never silently move focus to a different account with the same index.
@@ -511,6 +605,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     positions[key()]=next;render();return true;
   }
   host.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && orderEditor) { closeProviderOrder(); event.preventDefault(); return; }
     if (providerPicker && event.target.matches('[role=menuitemradio]') && ['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
       const options = [...host.querySelectorAll('[role=menuitemradio]')];
       const at = options.indexOf(event.target);
@@ -521,7 +616,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
   });
   host.addEventListener('click',event=>{const button=event.target.closest('[data-dash-action]');if(button&&host.contains(button)&&actions[Number(button.dataset.dashAction)])actions[Number(button.dataset.dashAction)]();});
   document.querySelectorAll('#navigation [data-page]').forEach(button=>button.addEventListener('click',()=>{
-    page=button.dataset.page;drill=null;document.querySelectorAll('#navigation [data-page]').forEach(n=>{if(n.dataset.page===page)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});render();
+    orderEditor=null;orderFollow=null;page=button.dataset.page;drill=null;document.querySelectorAll('#navigation [data-page]').forEach(n=>{if(n.dataset.page===page)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});render();
   }));
   document.getElementById('period').addEventListener('change',event=>{period=event.target.value;drill=null;render();});
   const prev=document.getElementById('page-prev'),next=document.getElementById('page-next');if(prev)prev.addEventListener('click',()=>turn(-1));if(next)next.addEventListener('click',()=>turn(1));
@@ -532,7 +627,16 @@ export function createDashboard(host, onDisplayChange = () => {}) {
   }
   return {
     turn,
-    update(stats, history, nextContext, archive = null) {
+    setOrderSource(hubUrl) {
+      let source = '';
+      try { const url = new URL(hubUrl); if (['http:', 'https:'].includes(url.protocol)) source = url.origin; } catch (_) { /* Unconfigured Hub. */ }
+      if (source === orderSource) return;
+      orderSource = source; savedOrder = orderStore.load(source);
+      orderEditor = null; orderFollow = null; quotaGeometry = null;
+      Object.keys(positions).filter(key => key.startsWith('limits:') || key === 'provider-order').forEach(key => delete positions[key]);
+      render('content');
+    },
+    update(stats, history, nextContext) {
       // Input indices are page-local, not account IDs. Reconcile a selection when
       // a refreshed Hub snapshot reorders accounts; ambiguous labels return to all.
       if (providerKey !== null && data && stats !== data.stats) {
@@ -540,15 +644,16 @@ export function createDashboard(host, onDisplayChange = () => {}) {
         const matches = (stats?.limits?.providers || []).map((p, index) => ({ p, index })).filter(({ p }) => providerIdentity(p) === identity);
         providerKey = matches.length === 1 ? matches[0].index : null;
       }
-      data = stats ? { stats, history, archive } : null; context = nextContext || {}; render('content');
+      data = stats ? { stats, history } : null; context = nextContext || {}; render('content');
     },
     back() {
+      if (orderEditor) { closeProviderOrder(); return true; }
       if (drill) drill = null;
       else if (page === 'limits' && providerPicker) providerPicker = false;
       else if (page === 'limits' && providerKey !== null) providerKey = null;
       else return false;
       render(); return true;
     },
-    clear() { data = null; drill = null; providerKey = null; providerPicker = false; render(); }
+    clear() { data = null; drill = null; providerKey = null; providerPicker = false; orderEditor = null; orderFollow = null; render(); }
   };
 }

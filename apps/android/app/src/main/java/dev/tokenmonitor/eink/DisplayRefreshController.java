@@ -14,12 +14,17 @@ final class DisplayRefreshController {
     private final DisplayRefreshPolicy policy = new DisplayRefreshPolicy();
     private final OnyxDisplayBackend backend;
     private final Runnable drain = this::awaitVisualState;
-    private long generation;
-    private boolean waitingForVisualState;
+    private final DisplayRefreshPolicy.VisualFence fence = new DisplayRefreshPolicy.VisualFence();
+    private Runnable visualTimeout;
+    private final View.OnAttachStateChangeListener attachment = new View.OnAttachStateChangeListener() {
+        @Override public void onViewAttachedToWindow(View ignored) { fence.resetRetries(); schedule(); }
+        @Override public void onViewDetachedFromWindow(View ignored) { cancel(); }
+    };
 
     DisplayRefreshController(WebView view) {
         this.view = view;
         backend = new OnyxDisplayBackend(Build.MANUFACTURER, Build.MODEL, view, View.class);
+        view.addOnAttachStateChangeListener(attachment);
     }
 
     String capabilities() {
@@ -31,13 +36,15 @@ final class DisplayRefreshController {
     void request(String reason) {
         if (!policy.request(reason, SystemClock.uptimeMillis())) return;
         // A newer DOM change needs its own fence. Old callbacks cannot consume newer requests.
-        generation++;
-        waitingForVisualState = false;
+        cancel();
+        fence.resetRetries();
         schedule();
     }
 
     void resume() {
+        cancel();
         policy.resume(SystemClock.uptimeMillis());
+        fence.resetRetries();
         schedule();
     }
 
@@ -49,39 +56,66 @@ final class DisplayRefreshController {
     void destroy() {
         policy.destroy();
         cancel();
+        view.removeOnAttachStateChangeListener(attachment);
     }
 
     private void cancel() {
-        generation++;
-        waitingForVisualState = false;
+        fence.cancel();
+        clearVisualTimeout();
         handler.removeCallbacks(drain);
     }
 
     private void schedule() {
         handler.removeCallbacks(drain);
-        if (!policy.isActive() || !policy.hasPending() || waitingForVisualState) return;
+        if (!policy.isActive() || !policy.hasPending() || fence.isWaiting()) return;
         handler.postDelayed(drain, policy.delay(SystemClock.uptimeMillis()));
     }
 
     private void awaitVisualState() {
-        if (!policy.isActive() || !policy.hasPending() || waitingForVisualState) return;
+        if (!policy.isActive() || !policy.hasPending() || fence.isWaiting()) return;
         if (!view.isAttachedToWindow() || view.getVisibility() != View.VISIBLE) return;
-        waitingForVisualState = true;
-        final long ticket = ++generation;
-        view.postVisualStateCallback(ticket, new WebView.VisualStateCallback() {
-            @Override public void onComplete(long requestId) {
-                if (ticket != generation || !policy.isActive()) return;
-                waitingForVisualState = false;
-                DisplayRefreshPolicy.Update update = policy.take(SystemClock.uptimeMillis());
-                if (update != DisplayRefreshPolicy.Update.NONE) {
-                    boolean wasSupported = backend.isSupported();
-                    if (!backend.refresh(update == DisplayRefreshPolicy.Update.FULL)) view.invalidate();
-                    if (wasSupported && !backend.isSupported()) {
-                        view.evaluateJavascript("window.dispatchEvent(new Event('tokenmonitor:display-capabilities'))", null);
+        final long ticket = fence.begin();
+        visualTimeout = () -> {
+            if (!fence.complete(ticket)) return;
+            visualTimeout = null;
+            retryVisualState();
+        };
+        handler.postDelayed(visualTimeout, DisplayRefreshPolicy.VisualFence.TIMEOUT_MS);
+        try {
+            view.postVisualStateCallback(ticket, new WebView.VisualStateCallback() {
+                @Override public void onComplete(long requestId) {
+                    if (!fence.complete(ticket)) return;
+                    clearVisualTimeout();
+                    if (!policy.isActive()) return;
+                    DisplayRefreshPolicy.Update update = policy.take(SystemClock.uptimeMillis());
+                    if (update != DisplayRefreshPolicy.Update.NONE) {
+                        boolean wasSupported = backend.isSupported();
+                        if (!backend.refresh(update == DisplayRefreshPolicy.Update.FULL)) view.invalidate();
+                        if (wasSupported && !backend.isSupported()) {
+                            view.evaluateJavascript("window.dispatchEvent(new Event('tokenmonitor:display-capabilities'))", null);
+                        }
                     }
+                    schedule();
                 }
-                schedule();
-            }
-        });
+            });
+        } catch (RuntimeException ignored) {
+            // A destroyed/unavailable WebView must not leave the queue permanently waiting.
+            // Preserve pending intent for the next lifecycle or visible-change request.
+            clearVisualTimeout();
+            retryVisualState();
+        }
+    }
+
+    private void retryVisualState() {
+        fence.cancel();
+        // Retry a transient renderer failure once. After the second failure retain
+        // pending intent without polling; a real DOM request, attach, or resume resets
+        // the budget. No timeout dispatches hardware work before a visual commit.
+        if (fence.retry()) schedule();
+    }
+
+    private void clearVisualTimeout() {
+        if (visualTimeout != null) handler.removeCallbacks(visualTimeout);
+        visualTimeout = null;
     }
 }

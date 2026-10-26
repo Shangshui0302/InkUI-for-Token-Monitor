@@ -13,6 +13,7 @@ final class DisplayRefreshPolicy {
     private int pagesSinceFull;
     private int partialsSinceFull;
     private Update pending = Update.NONE;
+    private boolean pendingPage;
     private long dueAt;
     private long lastRefresh = -MIN_INTERVAL_MS;
 
@@ -22,16 +23,15 @@ final class DisplayRefreshPolicy {
         request("full", now);
     }
 
-    void pause() { active = false; pending = Update.NONE; }
+    void pause() { active = false; pending = Update.NONE; pendingPage = false; }
     void destroy() { pause(); destroyed = true; }
     boolean isActive() { return active && !destroyed; }
     boolean hasPending() { return pending != Update.NONE; }
 
     boolean request(String reason, long now) {
         if (!isActive() || !("page".equals(reason) || "content".equals(reason) || "full".equals(reason))) return false;
-        if ("page".equals(reason)) pagesSinceFull++;
-        Update requested = "full".equals(reason) || pagesSinceFull >= PAGES_PER_FULL_REFRESH
-                ? Update.FULL : Update.PARTIAL;
+        if ("page".equals(reason)) pendingPage = true;
+        Update requested = "full".equals(reason) ? Update.FULL : Update.PARTIAL;
         long requestedAt = Math.max(now + ("content".equals(reason) ? CONTENT_DELAY_MS : 0),
                 lastRefresh + MIN_INTERVAL_MS);
         // Content bursts share a deadline; page/full requests can move that deadline earlier.
@@ -44,16 +44,43 @@ final class DisplayRefreshPolicy {
 
     Update take(long now) {
         if (!isActive() || pending == Update.NONE || now < dueAt) return Update.NONE;
-        // Count dispatched refreshes, so a content burst contributes only once. A full
+        // Count dispatched refreshes, so coalesced or canceled pages do not spend the budget. A full
         // refresh is due on the next real update after 30 partials, never on an idle timer.
-        Update result = pending == Update.PARTIAL && partialsSinceFull >= PARTIALS_PER_FULL_REFRESH
+        Update result = pending == Update.PARTIAL && (partialsSinceFull >= PARTIALS_PER_FULL_REFRESH
+                || (pendingPage && pagesSinceFull + 1 >= PAGES_PER_FULL_REFRESH))
                 ? Update.FULL : pending;
         pending = Update.NONE;
         if (result == Update.FULL) {
             pagesSinceFull = 0;
             partialsSinceFull = 0;
-        } else partialsSinceFull++;
+        } else {
+            partialsSinceFull++;
+            if (pendingPage) pagesSinceFull++;
+        }
+        pendingPage = false;
         lastRefresh = now;
         return result;
+    }
+    /** Pure callback guard and bounded retry budget shared with the coordinator. */
+    static final class VisualFence {
+        static final long TIMEOUT_MS = 2000;
+        private long generation;
+        private boolean waiting;
+        private int retries;
+
+        void resetRetries() { retries = 1; }
+        boolean retry() {
+            if (retries == 0) return false;
+            retries--;
+            return true;
+        }
+        long begin() { waiting = true; return ++generation; }
+        boolean isWaiting() { return waiting; }
+        boolean complete(long ticket) {
+            if (!waiting || ticket != generation) return false;
+            waiting = false;
+            return true;
+        }
+        void cancel() { generation++; waiting = false; }
     }
 }

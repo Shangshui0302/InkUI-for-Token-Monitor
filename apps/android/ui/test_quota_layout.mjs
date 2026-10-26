@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { performance } from 'node:perf_hooks';
 import { planQuotaPages, planQuotaMetrics, QUOTA_DIAL_ASPECT } from './quota-layout.mjs';
+import { quotaFigure } from './quota-presentation.mjs';
 
 const measure = (text, size) => text.length * size * .52;
 const cell = (text, extra = {}) => ({ text, type: 'percent', hasMeter: true,
@@ -193,11 +194,48 @@ test('bounded 128 accounts by 32 windows plans within an interactive budget', t 
     hasAttachment: index % 2 === 0,
     metricHeights: Array.from({ length: 32 }, (_, metric) => metric % 2 ? 57 : 71),
   }));
-  const size = { width: 622, height: 279 };
-  const started = performance.now();
-  const plan = planQuotaPages(groups, size);
-  const elapsed = performance.now() - started;
-  t.diagnostic(`128 × 32 windows: ${elapsed.toFixed(1)} ms, ${plan.pages.length} pages`);
-  assert.ok(elapsed < 2000, `planning took ${elapsed.toFixed(1)} ms`);
-  assertCoverage(groups, plan, size);
+  for (const readingOrder of [false, true]) {
+    const size = { width: 622, height: 279, readingOrder };
+    const started = performance.now();
+    const plan = planQuotaPages(groups, size);
+    const elapsed = performance.now() - started;
+    t.diagnostic(`128 × 32 windows, custom order=${readingOrder}: ${elapsed.toFixed(1)} ms, ${plan.pages.length} pages`);
+    assert.ok(elapsed < 2000, `planning took ${elapsed.toFixed(1)} ms`);
+    assertCoverage(groups, plan, size);
+  }
+});
+
+test('custom order follows visual reading order while preserving complete account coverage', () => {
+  const groups = [account(1, { hasAttachment: true }), account(1), account(4), account(0), account(8), account(2)];
+  for (const width of [240, 360, 622, 1072]) for (const height of [180, 279, 453]) {
+    const size = { width, height, readingOrder: true };
+    const plan = planQuotaPages(groups, size);
+    assertCoverage(groups, plan, size);
+    for (const page of plan.pages) {
+      const visual = page.slice().sort((a, b) => Math.abs(a.y - b.y) < EPSILON ? a.x - b.x : a.y - b.y);
+      assert.deepEqual(visual.map(card => [card.groupIndex, card.start]), page.map(card => [card.groupIndex, card.start]));
+    }
+  }
+});
+
+test('percentage precision and balance digit changes keep figure size, flow and meter geometry stable', () => {
+  for (const unit of ['%', 'USD', 'tokens']) {
+    const plans = [0, 0.00000123, 9, 98.09, 100, 9999, 10000, -1, -0.00000123, 1e308].filter(value => unit !== '%' || value >= 0 && value <= 100).map(value => {
+      const figure = quotaFigure({ value, unit });
+      const cells = [cell(figure.text, { reserveText: figure.reserveText, type: unit === '%' ? 'percent' : 'balance', width: 160, height: 100 })];
+      const plan = planQuotaMetrics(cells, { measure });
+      assertMetricsFit(cells, plan);
+      return plan;
+    });
+    for (const plan of plans) assert.deepEqual(plan, plans[0]);
+  }
+});
+
+test('a supplied dial remains visible beside a long amount in a short metric row', () => {
+  for (const width of [121, 145, 190]) {
+    const cells = [cell('HK$12,345.67', { width, height: 35, unitWidth: 0 })];
+    const plan = planQuotaMetrics(cells, { measure });
+    assert.ok(plan.dialWidths[0] >= 28);
+    assertMetricsFit(cells, plan);
+  }
 });

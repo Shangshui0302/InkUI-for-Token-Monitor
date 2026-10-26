@@ -14,19 +14,26 @@ final class DeviceStatus {
     final Integer batteryPercent;
     final Boolean charging;
     final Link link;
+    final long networkRevision;
 
     DeviceStatus(boolean fullscreen, long now, ZoneId zone, Integer batteryPercent, Boolean charging, Link link) {
+        this(fullscreen, now, zone, batteryPercent, charging, link, 0);
+    }
+
+    DeviceStatus(boolean fullscreen, long now, ZoneId zone, Integer batteryPercent, Boolean charging, Link link, long networkRevision) {
         this.fullscreen = fullscreen;
         this.time = TIME.format(Instant.ofEpochMilli(now).atZone(zone));
         this.batteryPercent = batteryPercent;
         this.charging = charging;
         this.link = link;
+        this.networkRevision = networkRevision;
     }
 
     String toJson() {
         return "{\"fullscreen\":" + fullscreen + ",\"time\":\"" + time
                 + "\",\"batteryPercent\":" + batteryPercent + ",\"charging\":" + charging
-                + ",\"network\":\"" + link.transport + "\",\"networkValidated\":" + link.validated + "}";
+                + ",\"network\":\"" + link.transport + "\",\"networkValidated\":" + link.validated
+                + ",\"networkRevision\":\"" + networkRevision + "\"}";
     }
 
     static Integer batteryPercent(int level, int scale) {
@@ -41,9 +48,9 @@ final class DeviceStatus {
         DeviceStatus value = (DeviceStatus) other;
         return fullscreen == value.fullscreen && time.equals(value.time)
                 && Objects.equals(batteryPercent, value.batteryPercent) && Objects.equals(charging, value.charging)
-                && link.equals(value.link);
+                && link.equals(value.link) && networkRevision == value.networkRevision;
     }
-    @Override public int hashCode() { return Objects.hash(fullscreen, time, batteryPercent, charging, link); }
+    @Override public int hashCode() { return Objects.hash(fullscreen, time, batteryPercent, charging, link, networkRevision); }
 
     static final class Link {
         static final Link UNKNOWN = new Link("unknown", null);

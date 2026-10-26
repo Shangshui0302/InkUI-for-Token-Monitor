@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dashboardView, projectDashboardStats, projectHistoryForCache, projectArchiveForCache } from './dashboard-model.mjs';
+import { dashboardView, projectDashboardStats, projectHistoryForCache } from './dashboard-model.mjs';
 
 const now = new Date(2026, 9, 23, 12).getTime();
 const time = delta => new Date(now - delta).toISOString();
@@ -137,43 +137,19 @@ test('an old or undated snapshot cannot move yesterday usage to today', () => {
 });
 
 
-test('local archive adds cumulative rows without replacing totals or Hub cumulative rows', () => {
+test('cumulative sessions use only the Hub cumulative period and retain Hub archive flags', () => {
   const raw = base();
-  raw.periods.allTime.sessions.same = { title: 'Hub', lastUsedAt: time(700_000), totalTokens: 400, costUsd: 8, models: { hub: 400 } };
-  raw.periods.month.sessions.local = { title: 'live', lastUsedAt: time(1), totalTokens: 50, costUsd: 1, models: { recent: 50 }, contextTokens: 100, contextWindow: 200 };
-  const archive = { available: true, capturedAt: time(0), sessions: {
-    same: { title: 'old', lastUsedAt: time(0), totalTokens: 999, costUsd: 99 },
-    local: { title: 'retained', lastUsedAt: time(700_000), totalTokens: 700, costUsd: 14, models: { cumulative: 700 } },
-    historical: { lastUsedAt: time(0), totalTokens: 200, costUsd: 4, contextTokens: 100, contextWindow: 200 }
-  } };
-  const view = dashboardView(raw, null, 'allTime', now, archive);
+  raw.periods.allTime.sessions.hub = { title: 'Hub', lastUsedAt: time(1), totalTokens: 400, costUsd: 8, models: { hub: 400 }, archived: true };
+  raw.periods.month.sessions.recent = { title: 'recent', lastUsedAt: time(1), totalTokens: 50 };
+  const projected = projectDashboardStats(raw);
+  assert.equal(projected.periods.allTime.sessions.hub.archived, true);
+  const view = dashboardView(projected, null, 'allTime', now);
   assert.equal(view.summary.totalTokens, 9000);
   assert.equal(view.summary.costUsd, 200);
-  assert.equal(view.sessionsScope, 'local-archive');
-  assert.equal(view.archiveCapturedAt, time(0));
   assert.equal(view.sessionsUnavailable, false);
-  assert.equal(view.sessions.length, 3);
-  assert.equal(view.sessions.find(s => s.key === 'same').costUsd, 8);
-  const local = view.sessions.find(s => s.key === 'local');
-  assert.equal(local.totalTokens, 700);
-  assert.equal(local.costUsd, 14);
-  assert.equal(local.model, 'cumulative');
-  assert.equal(local.state, 'running');
-  assert.equal(local.contextPercent, 50);
-  assert.equal(view.sessions.find(s => s.key === 'historical').state, 'idle');
-  assert.equal(view.sessions.find(s => s.key === 'historical').contextPercent, null);
-  assert.deepEqual(view.runningSessions.map(s => s.key), ['local']);
-  assert.equal(dashboardView(raw, null, 'today', now, archive).sessionsScope, 'hub');
-});
-
-test('archive projection removes metadata and forces historical rows to archive state', () => {
-  const raw = { available: true, capturedAt: time(0), accountEmail: 'secret', path: '/private', sessions: { x: { title: 'allowed', lastUsedAt: time(0), archived: false, token: 'secret', sourcePath: '/private' } } };
-  const projected = projectArchiveForCache(raw);
-  assert.equal(projected.sessions.x.archived, true);
-  assert.equal(projected.sessions.x.title, 'allowed');
-  assert.equal(JSON.stringify(projected).includes('secret'), false);
-  assert.equal(JSON.stringify(projected).includes('/private'), false);
-  assert.deepEqual(projectArchiveForCache(projected), projected);
-  assert.equal(dashboardView(base(), null, 'allTime', now, { available: false, sessions: {} }).sessionsUnavailable, true);
-  assert.throws(() => projectArchiveForCache({ available: true, sessions: [] }));
+  assert.deepEqual(view.sessions.map(s => s.key), ['hub']);
+  assert.equal(view.sessions[0].costUsd, 8);
+  assert.equal(view.sessions[0].archived, true);
+  assert.equal(view.sessions[0].state, 'idle');
+  assert.deepEqual(view.runningSessions.map(s => s.key), ['recent']);
 });

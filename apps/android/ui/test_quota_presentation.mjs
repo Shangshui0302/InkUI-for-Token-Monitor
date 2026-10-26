@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeStats } from './model.mjs';
-import { providerQuotaEntries, quotaPresentation, providerQuotaPairs, quotaWindowPairs, quotaNumber, quotaCompactNumber } from './quota-presentation.mjs';
+import { providerQuotaEntries, quotaPresentation, providerQuotaPairs, quotaWindowPairs, quotaNumber, quotaCompactNumber, quotaFigure } from './quota-presentation.mjs';
 const p = (provider, windows = [], extra = {}) => normalizeStats({ limits: { providers: [{ provider, status: 'ok', windows, ...extra }] } })[0];
 
 test('small positive amounts keep their magnitude; negatives and zero remain distinct', () => {
@@ -76,4 +76,24 @@ test('a limit without usage is shown as a limit, never as consumption or an unkn
     const reading=quotaPresentation(account,account.windows[0]);
     assert.equal(reading.value,100); assert.equal(reading.label,'上限'); assert.equal(reading.meter,null);
   }
+});
+
+test('card percentages stay compact and money keeps two decimals across value changes', () => {
+  assert.deepEqual([98.09, 100, 9, 0].map(value => quotaFigure({ value, unit: '%' }).text),
+    ['98.09', '100', '9', '0']);
+  assert.deepEqual([1, 10.5, 9999.99, 10000].map(value => quotaFigure({ value, unit: 'USD' }).text),
+    ['$1.00', '$10.50', '$9,999.99', '$10.00K']);
+  assert.deepEqual([0, 9, 10.5].map(value => quotaFigure({ value, unit: '点' }).text), ['0', '9', '10.5']);
+  for (const unit of ['%', 'USD', 'tokens', '点', '']) {
+    assert.equal(new Set([0, 9, 100, 9999, 10000, -1].map(value => quotaFigure({ value, unit }).reserveText)).size, 1);
+  }
+});
+
+test('card figures preserve tiny nonzero values, missing values and readable extreme magnitudes', () => {
+  assert.notEqual(quotaFigure({ value: 0.00000012, unit: 'USD' }).text, '$0.00');
+  assert.equal(quotaFigure({ value: null, unit: '%' }).text, '—');
+  assert.equal(quotaFigure({ value: -1.25, unit: 'CNY' }).text, '¥-1.25');
+  assert.equal(quotaFigure({ value: 1e308, unit: 'USD' }).text, '$1e+308');
+  assert.equal(quotaFigure({ value: 12345, unit: 'tokens' }).text, '12.35K');
+  assert.equal(quotaFigure({ text: '不限', unit: '', value: null }).text, '不限');
 });

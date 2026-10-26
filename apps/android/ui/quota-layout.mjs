@@ -7,21 +7,24 @@ const GAP = 8;
 
 export const QUOTA_DIAL_ASPECT = 50 / 88;
 
-/** Size a whole account's figures together, using their actual text widths.
+/** Size a whole account's figures together, using their reserved format widths.
  * A tall, narrow cell can put its dial below the value instead of squeezing
  * both into a short line. Neither layout changes the packed card rectangles.
  */
 export function planQuotaMetrics(cells, { font = 14, measure } = {}) {
   const numbers = cells.filter(cell => cell.type !== 'text');
   if (!numbers.length) return { numberSize: font * 1.2, flow: 'side', dialWidths: cells.map(() => 0) };
-  const widthAtOne = cell => Math.max(1, measure(cell.text, 1));
+  const widthAtOne = cell => Math.max(1, measure(cell.text, 1),
+    measure(cell.reserveText || (cell.type === 'percent' ? '100.00' : cell.text), 1));
   const preferred = Math.min(font * 4.8, ...numbers.map(cell => Math.min(cell.height * .82 / 1.12, cell.preferred)));
   const minimum = Math.min(preferred, font * 1.8);
   const sideDials = cells.map(cell => {
     if (!cell.hasMeter) return 0;
     const space = cell.width - cell.unitWidth - widthAtOne(cell) * minimum - 7;
-    const size = Math.min(cell.height / QUOTA_DIAL_ASPECT, cell.width * .44, space);
-    return size >= 28 ? size : 0;
+    // The meter has its own reserved area. A longer amount may reduce the
+    // shared figure size, but must not silently remove a supplied meter.
+    return Math.max(0, Math.min(cell.height / QUOTA_DIAL_ASPECT, cell.width * .44,
+      cell.width - cell.unitWidth - 6, Math.max(28, space)));
   });
   const sideSize = Math.max(1, Math.min(preferred, ...numbers.map(cell => {
     const dial = sideDials[cells.indexOf(cell)];
@@ -52,7 +55,7 @@ export function planQuotaMetrics(cells, { font = 14, measure } = {}) {
  * when a complete account cannot fit do we split its windows, in source order.
  * Work per packing attempt is bounded by account count and viewport width.
  */
-export function planQuotaPages(groups, { width, height, font = 14 } = {}) {
+export function planQuotaPages(groups, { width, height, font = 14, readingOrder = false } = {}) {
   const result = { compact: false, gap: GAP, pages: [] };
   if (!Array.isArray(groups) || groups.length === 0) return { ...result, pages: [[]] };
   const compact = () => ({ ...result, compact: true, pages: [] });
@@ -124,6 +127,12 @@ export function planQuotaPages(groups, { width, height, font = 14 } = {}) {
     let best = null;
     let bestScore = Infinity;
     const consider = page => {
+      // A saved order must also be the visible reading order. A column-first
+      // packing can otherwise put the third account above the second one.
+      if (readingOrder) {
+        const visual = page.slice().sort((a, b) => Math.abs(a.y - b.y) < 1e-7 ? a.x - b.x : a.y - b.y);
+        if (visual.some((card, index) => card !== page[index])) return;
+      }
       // Prefer cards whose height is close to their actual content. In
       // particular, a balance-only card should not inherit a tall neighbour's
       // unused vertical area when a stacked alternative is possible.

@@ -54,6 +54,10 @@ final class ConnectionTestController {
             BooleanSupplier current, Consumer<Result> callback) {
         cancel();
         if (closed) return;
+        if (!"hub".equals(source)) {
+            callback.accept(new Result(id, "hub", "", "invalid_connection", 0));
+            return;
+        }
         Test test = new Test(id, source, origin, secret, current, callback);
         active = test;
         test.deadline = timer.schedule(() -> finish(test, "timeout"), deadlineMs, TimeUnit.MILLISECONDS);
@@ -78,8 +82,7 @@ final class ConnectionTestController {
             if (!isActive(test)) return;
             if (!test.current.getAsBoolean()) { finish(test, "cancelled"); return; }
             if (test.origin.isEmpty()) { finish(test, "unconfigured"); return; }
-            String path = "archive".equals(test.source) ? "/api/session-archive" : "/api/stats";
-            connection = factory.open(test.origin + path);
+            connection = factory.open(test.origin + "/api/stats");
             synchronized (this) {
                 if (active != test) { connection.disconnect(); return; }
                 test.connection = connection;

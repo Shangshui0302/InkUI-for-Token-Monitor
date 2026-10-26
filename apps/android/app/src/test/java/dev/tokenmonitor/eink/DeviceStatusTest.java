@@ -11,7 +11,7 @@ public final class DeviceStatusTest {
         long now = Instant.parse("2026-10-25T15:59:42Z").toEpochMilli();
         DeviceStatus.Link lan = new DeviceStatus.Link("wifi", false);
         DeviceStatus status = new DeviceStatus(true, now, ZoneId.of("Asia/Shanghai"), 73, false, lan);
-        equal("{\"fullscreen\":true,\"time\":\"23:59\",\"batteryPercent\":73,\"charging\":false,\"network\":\"wifi\",\"networkValidated\":false}", status.toJson());
+        equal("{\"fullscreen\":true,\"time\":\"23:59\",\"batteryPercent\":73,\"charging\":false,\"network\":\"wifi\",\"networkValidated\":false,\"networkRevision\":\"0\"}", status.toJson());
         equal("00:00", new DeviceStatus(true, now + 18_000, ZoneId.of("Asia/Shanghai"), 73, false, lan).time);
         equal("15:59", new DeviceStatus(true, now, ZoneId.of("UTC"), 73, false, lan).time);
         equal(18_000L, DeviceStatus.millisToNextMinute(now));
@@ -45,8 +45,11 @@ public final class DeviceStatusTest {
         different(status, new DeviceStatus(true, now, ZoneId.of("Asia/Shanghai"), null, false, lan));
         different(status, new DeviceStatus(true, now, ZoneId.of("Asia/Shanghai"), 73, true, lan));
         different(status, new DeviceStatus(true, now, ZoneId.of("Asia/Shanghai"), 73, false, new DeviceStatus.Link("wifi", true)));
+        different(status, new DeviceStatus(true, now, ZoneId.of("Asia/Shanghai"), 73, false, lan, 1));
+        DeviceStatus changedNetwork = new DeviceStatus(true, now, ZoneId.of("Asia/Shanghai"), 73, false, lan, 42);
+        if (!changedNetwork.toJson().contains("\"networkRevision\":\"42\"")) throw new AssertionError("Missing network revision");
         DeviceStatus unknown = new DeviceStatus(false, now, ZoneId.of("UTC"), null, null, DeviceStatus.Link.UNKNOWN);
-        equal("{\"fullscreen\":false,\"time\":\"15:59\",\"batteryPercent\":null,\"charging\":null,\"network\":\"unknown\",\"networkValidated\":null}", unknown.toJson());
+        equal("{\"fullscreen\":false,\"time\":\"15:59\",\"batteryPercent\":null,\"charging\":null,\"network\":\"unknown\",\"networkValidated\":null,\"networkRevision\":\"0\"}", unknown.toJson());
         System.out.println("Device status checks passed (clock, battery, LAN link, unknown values, change equality)");
     }
 

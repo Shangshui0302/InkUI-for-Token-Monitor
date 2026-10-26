@@ -3,20 +3,17 @@ export function publicConnection(value = {}) {
   return Object.freeze({
     hubUrl: typeof value.hubUrl === 'string' ? value.hubUrl : '',
     hasHubSecret: value.hasHubSecret === true,
-    archiveUrl: typeof value.archiveUrl === 'string' ? value.archiveUrl : '',
-    hasArchiveSecret: value.hasArchiveSecret === true,
     revision: typeof value.revision === 'string' ? value.revision : ''
   });
 }
-export function connectionPayload(hubUrl, hubInput, clearHub, archiveUrl, archiveInput, clearArchive) {
+export function connectionPayload(hubUrl, hubInput, clearHub) {
   // Never retain secret text in state, storage, status, or the returned projection.
   return {
-    hubUrl: hubUrl.trim(), hubSecret: clearHub ? '' : hubInput || null,
-    archiveUrl: archiveUrl.trim(), archiveSecret: clearArchive ? '' : archiveInput || null
+    hubUrl: hubUrl.trim(), hubSecret: clearHub ? '' : hubInput || null
   };
 }
 export function sourceKey(connection) {
-  return JSON.stringify([connection.hubUrl, connection.archiveUrl, connection.revision]);
+  return JSON.stringify([connection.hubUrl, connection.revision]);
 }
 export function createSourceFence(initial = '') {
   let key = initial, epoch = 0;
@@ -30,7 +27,7 @@ export function createSourceFence(initial = '') {
 
 // Only a bare Hub host receives the documented default port. Explicit ports,
 // schemes and paths are never replaced with a different destination.
-export function normalizeConnectionAddress(input, source = 'hub') {
+export function normalizeConnectionAddress(input) {
   const raw = String(input || '').trim();
   if (!raw) return { value: '', origin: '', error: '', loopback: false };
   const invalid = message => ({ value: '', origin: '', error: message, loopback: false });
@@ -49,7 +46,7 @@ export function normalizeConnectionAddress(input, source = 'hub') {
   if (suffix && suffix !== '/') return invalid('这里只接受来源地址。请去掉路径、查询参数或 # 后缀，再测试。');
   if (/:0$/.test(authority)) return invalid('端口必须在 1–65535 之间。');
   const hasPort = authority.startsWith('[') ? /\]:\d+$/.test(authority) : /:\d+$/.test(authority);
-  const defaultPort = !explicitScheme && !hasPort && source === 'hub';
+  const defaultPort = !explicitScheme && !hasPort;
   value = parsed.protocol + '//' + authority.toLowerCase() + (defaultPort ? ':17321' : '');
   // Match the native URI projection, which keeps literal IPv6 spelling.
   const origin = parsed.protocol === 'http:' ? value.replace(/:80$/, '') : value.replace(/:443$/, '');
@@ -59,10 +56,10 @@ export function normalizeConnectionAddress(input, source = 'hub') {
 }
 
 export function connectionTestMessage(result) {
-  if (result.ok) return '测试成功：当前输入可以读取' + (result.source === 'archive' ? '归档' : ' Hub') + '。' + (Number.isFinite(result.latencyMs) ? '用时 ' + Math.max(0, Math.round(result.latencyMs)) + ' 毫秒。' : '') + '测试不会保存，确认后点「保存并连接」。';
+  if (result.ok) return 'Hub 连接测试成功。' + (Number.isFinite(result.latencyMs) ? '用时 ' + Math.max(0, Math.round(result.latencyMs)) + ' 毫秒。' : '');
   return ({
     invalid_connection: '地址或密钥格式无效，请检查当前输入后重试。',
-    unconfigured: '请先填写' + (result.source === 'archive' ? '归档' : ' Hub') + '地址。',
+    unconfigured: '请先填写 Hub 地址。',
     unauthorized: '认证失败，请填写有效密钥；更换来源地址后需重新输入密钥。',
     timeout: '测试超时，请检查电脑是否在线、端口和防火墙是否允许局域网访问。',
     host_not_found: '找不到主机。请检查名称，或改填电脑的局域网 IP。',

@@ -8,6 +8,28 @@ const format = new Intl.NumberFormat('zh-CN', { maximumSignificantDigits: 21 });
 export const quotaNumber = value => finite(value) ? format.format(value) : '—';
 const compact = value => !finite(value) ? '—' : value !== 0 && Math.abs(value) < .01 ? Number(value.toPrecision(3)).toString() : Math.abs(value) >= 1e9 ? +(value / 1e9).toFixed(2) + 'B' : Math.abs(value) >= 1e6 ? +(value / 1e6).toFixed(2) + 'M' : Math.abs(value) >= 1e4 ? +(value / 1e3).toFixed(2) + 'K' : new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 }).format(value);
 export const quotaCompactNumber = compact;
+const fixedFigure = new Intl.NumberFormat('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const percentFigure = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
+// The card format is tied to the metric, rather than the current value. Keep
+// percentages compact and money at two decimals, preserving tiny amounts.
+export function quotaFigure(reading) {
+  const symbol = { CNY: '¥', USD: '$', EUR: '€', GBP: '£', HKD: 'HK$' }[reading.unit] || '';
+  const unit = reading.unit && !symbol && !reading.text ? reading.unit === 'CREDITS' ? '点' : reading.unit : '';
+  if (reading.text) return { text: reading.text, reserveText: reading.text, unit };
+  const decimal = Boolean(symbol);
+  let amount = reading.unit === '%' && finite(reading.value) ? percentFigure.format(reading.value) : compact(reading.value);
+  if (reading.unit !== '%' && finite(reading.value) && (Math.abs(reading.value) >= 1e12 || amount.length > 9 && Math.abs(reading.value) < .01)) {
+    const [mantissa, exponent] = reading.value.toExponential(2).split('e');
+    amount = Number(mantissa) + 'e' + exponent;
+  } else if (finite(reading.value) && decimal && (reading.value === 0 || Math.abs(reading.value) >= .01)) {
+    const scale = Math.abs(reading.value) >= 1e9 ? 1e9 : Math.abs(reading.value) >= 1e6 ? 1e6 : Math.abs(reading.value) >= 1e4 ? 1e3 : 1;
+    amount = fixedFigure.format(reading.value / scale) + (scale === 1e9 ? 'B' : scale === 1e6 ? 'M' : scale === 1e3 ? 'K' : '');
+  }
+  return { text: symbol + amount, unit,
+    // Cover the complete ordinary compact format, including a sign and a
+    // suffix, so crossing 9 / 10 / 100 / 1,000 does not resize the account.
+    reserveText: reading.unit === '%' ? '100.00' : symbol + '-9,999.99B' };
+}
 const sourceNames = { oauth: 'OAuth', api: 'API', cli: 'CLI', web: '网页', rpc: 'RPC', local: '本地' };
 const kindNames = { session: '会话额度', daily: '每日额度', weekly: '每周额度', billing: '账期额度', resetCredits: '重置券' };
 const boundaryNames = { reset: '重置', expiry: '到期', mixed: '重置 / 到期' };
