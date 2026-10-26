@@ -25,6 +25,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - name: Install pinned Android build platform
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Native checks, every UI test, lint, and debug APKs
@@ -60,6 +64,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - name: Install pinned Android build platform
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Enable emulator KVM access
@@ -115,6 +123,10 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: '22'
+      - uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3
+        with:
+          packages: platform-tools
+          log-accepted-android-sdk-licenses: false
       - name: Install pinned Android build platform
         run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
       - name: Prepare private signing files
