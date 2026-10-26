@@ -85,7 +85,12 @@ jobs:
           target: google_apis
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
-          script: bash -ec 'if [ "${{ matrix.api }}" = 29 ]; then tools/setup-ci-webview.sh; fi; apps/android/gradlew --no-daemon --console=plain -p apps/android :app:connectedDebugAndroidTest'
+          script: |
+            if [ "${{ matrix.api }}" = 29 ]; then tools/setup-ci-webview.sh; fi
+            # Fresh emulator onboarding otherwise takes window focus from the app.
+            adb shell settings put secure immersive_mode_confirmations confirmed
+            test "$(adb shell settings get secure immersive_mode_confirmations | tr -d '\r')" = confirmed
+            apps/android/gradlew --no-daemon --console=plain -p apps/android :app:connectedDebugAndroidTest
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:

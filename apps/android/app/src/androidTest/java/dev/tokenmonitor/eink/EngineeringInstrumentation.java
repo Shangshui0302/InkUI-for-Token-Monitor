@@ -271,7 +271,12 @@ public final class EngineeringInstrumentation extends Instrumentation {
         float y = (float) (rect.getDouble(1) * scale);
         require(onMain(() -> x >= 0 && y >= 0 && x < view.getWidth() && y < view.getHeight()), "editor input is outside native viewport");
         onMain(() -> {
-            require(view.requestFocus() && view.hasWindowFocus(), "keyboard target did not obtain native view and window focus");
+            boolean requested = view.requestFocus();
+            require(requested && view.hasWindowFocus(), "keyboard target focus unavailable: requested=" + requested
+                    + ",focusable=" + view.isFocusable() + ",touchFocusable=" + view.isFocusableInTouchMode()
+                    + ",inTouchMode=" + view.isInTouchMode() + ",focused=" + view.hasFocus()
+                    + ",windowFocused=" + view.hasWindowFocus() + ",width=" + view.getWidth()
+                    + ",height=" + view.getHeight());
             long now = SystemClock.uptimeMillis();
             MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0);
             MotionEvent up = MotionEvent.obtain(now, now, MotionEvent.ACTION_UP, x, y, 0);
