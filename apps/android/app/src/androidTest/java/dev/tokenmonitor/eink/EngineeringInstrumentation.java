@@ -13,6 +13,7 @@ import android.net.NetworkCapabilities;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowInsets;
@@ -253,19 +254,40 @@ public final class EngineeringInstrumentation extends Instrumentation {
     private void exerciseKeyboard(WebView view) throws Exception {
         js(view, "document.getElementById('settings-open').click();document.getElementById('hub-edit').click();true");
         awaitJs(view, "!document.getElementById('connection-editor').hidden", "connection editor did not open");
+        await(() -> onMain(() -> view.isAttachedToWindow() && view.isShown() && view.hasWindowFocus()
+                && view.getWindowToken() != null && view.isLaidOut() && !view.isLayoutRequested()
+                && view.getWidth() > 0 && view.getHeight() > 0), "keyboard target window or native layout is not ready");
+        // Wait for Chromium's editor resize and the native inset layout before
+        // measuring the input. A previous fullscreen transition can still be settling.
+        CountDownLatch frames = new CountDownLatch(1);
+        runOnMainSync(() -> view.postOnAnimation(() -> view.postOnAnimation(frames::countDown)));
+        require(frames.await(5, TimeUnit.SECONDS), "keyboard target layout frames did not complete");
+        awaitJs(view, "(()=>{const e=document.getElementById('connection-url'),r=e.getBoundingClientRect();return !e.disabled&&r.width>0&&r.height>0&&r.left>=0&&r.top>=0&&r.right<=innerWidth&&r.bottom<=innerHeight})()", "keyboard input is not inside the settled viewport");
         int baseline = onMain(view::getHeight);
         Rect originalFrame = frame();
         JSONArray rect = new JSONArray(js(view, "(()=>{const r=document.getElementById('connection-url').getBoundingClientRect();return [r.left+r.width/2,r.top+r.height/2,innerWidth]})()"));
-        int[] location = new int[2];
-        runOnMainSync(() -> view.getLocationOnScreen(location));
         double scale = onMain(view::getWidth) / rect.getDouble(2);
-        float x = (float) (location[0] + rect.getDouble(0) * scale);
-        float y = (float) (location[1] + rect.getDouble(1) * scale);
-        require(x >= location[0] && y >= location[1], "editor input is outside native viewport");
-        long now = SystemClock.uptimeMillis();
-        MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0);
-        MotionEvent up = MotionEvent.obtain(now, now + 30, MotionEvent.ACTION_UP, x, y, 0);
-        try { sendPointerSync(down); sendPointerSync(up); } finally { down.recycle(); up.recycle(); }
+        float x = (float) (rect.getDouble(0) * scale);
+        float y = (float) (rect.getDouble(1) * scale);
+        require(onMain(() -> x >= 0 && y >= 0 && x < view.getWidth() && y < view.getHeight()), "editor input is outside native viewport");
+        onMain(() -> {
+            require(view.requestFocus() && view.hasWindowFocus(), "keyboard target did not obtain native view and window focus");
+            long now = SystemClock.uptimeMillis();
+            MotionEvent down = MotionEvent.obtain(now, now, MotionEvent.ACTION_DOWN, x, y, 0);
+            MotionEvent up = MotionEvent.obtain(now, now, MotionEvent.ACTION_UP, x, y, 0);
+            down.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+            up.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+            // Exercise the known WebView's native touch path in local coordinates.
+            // API 36 CI rejected global injection before WebView touch delivery;
+            // this avoids that separate system input-target ownership boundary.
+            try {
+                require(view.dispatchTouchEvent(down), "WebView rejected keyboard touch-down");
+                require(view.dispatchTouchEvent(up), "WebView rejected keyboard touch-up");
+            } finally { down.recycle(); up.recycle(); }
+            return null;
+        });
+        awaitJs(view, "document.activeElement?.id==='connection-url'", "native touch did not focus the actual editor input");
+        await(() -> onMain(() -> view.hasFocus() && view.hasWindowFocus()), "keyboard target lost native view or window focus");
         runOnMainSync(() -> {
             InputMethodManager ime = activity.getSystemService(InputMethodManager.class);
             ime.showSoftInput(view, InputMethodManager.SHOW_IMPLICIT);
