@@ -1,5 +1,5 @@
 import { publicConnection, sourceKey, createSourceFence } from './connection.mjs';
-import { nativeConnection, saveNativeConnection, createTransport } from './transport.mjs';
+import { nativeConnection, saveNativeConnection, reloadNativeConnection, createTransport } from './transport.mjs';
 import { createSettings } from './settings.js';
 import { projectDashboardStats, projectHistoryForCache } from './dashboard-model.mjs';
 import { createDashboard } from './dashboard.js';
@@ -117,7 +117,7 @@ let historyError = '';
 let historyCached = true;
 let historyForceQueued = false;
 let refreshQueued = false;
-const transport = createTransport();
+const transport = createTransport({ bridge: nativeBridge });
 const recovery = createConnectionRecovery();
 
 function setText(node, text) {
@@ -267,6 +267,19 @@ function resetSourceCaches() {
   snapshot = null; receivedAt = null; history = null; historyReceivedAt = null; historyRevision = null; historyError = ''; historyCached = true;
   dashboard.clear(); render();
 }
+function applyConnection(next, message) {
+  const changedSource = connectionConfig.hubUrl !== next.hubUrl;
+  connectionConfig = next;
+  if (!sourceFence.change(sourceKey(next))) sourceFence.invalidate();
+  recovery.reset(); clearTimeout(timer); timer = null; clearTimeout(recoveryTimer); recoveryTimer = null;
+  transport.cancel(); refreshQueued = false; historyForceQueued = false;
+  if (changedSource) dashboard.setOrderSource(next.hubUrl);
+  resetSourceCaches();
+  try { localStorage.setItem(sourceStampKey, sourceKey(next)); } catch (_) { /* Optional storage. */ }
+  if (next.hubUrl) { notice('正在连接', message); refresh(true); }
+  else notice(['read_failed', 'key_unavailable'].includes(next.storageState) ? '连接记录不可读' : '未配置',
+    ['read_failed', 'key_unavailable'].includes(next.storageState) ? '原连接记录已保留，请重试读取或重新配置。' : '请填写 Hub 地址并保存。');
+}
 settingsUI = createSettings({
   bridge: nativeBridge,
   getConfig: () => connectionConfig,
@@ -274,13 +287,12 @@ settingsUI = createSettings({
     detail: detailMessage, receivedAt, historyReceivedAt, historyError, deviceStatus }),
   saveConnection(payload) {
     const next = saveNativeConnection(nativeBridge, payload);
-    connectionConfig = next; dashboard.setOrderSource(next.hubUrl);
-    if (!sourceFence.change(sourceKey(next))) sourceFence.invalidate();
-    recovery.reset(); clearTimeout(recoveryTimer); recoveryTimer = null;
-    transport.cancel(); resetSourceCaches();
-    notice('正在连接', '配置已保存，正在读取数据。');
-    try { localStorage.setItem(sourceStampKey, sourceKey(next)); } catch (_) { /* Optional storage. */ }
-    refresh(true);
+    applyConnection(next, '配置已保存，正在读取数据。');
+    return next;
+  },
+  reloadConnection() {
+    const next = reloadNativeConnection(nativeBridge);
+    applyConnection(next, '连接记录已重新读取，正在读取数据。');
     return next;
   },
   clearCache() {
@@ -354,5 +366,14 @@ showInterval();
 }
 try { localStorage.removeItem('token-monitor-eink-session-archive-v1'); } catch (_) { /* Best-effort cleanup of a retired cache. */ }
 readCache();
-if (!connectionConfig.hubUrl) { notice('未配置', '请填写 Hub 地址并保存。'); settingsUI.open('connection'); }
+if (!connectionConfig.hubUrl) {
+  const unreadable = ['read_failed', 'key_unavailable'].includes(connectionConfig.storageState);
+  notice(unreadable ? '连接记录不可读' : '未配置', unreadable ? '原连接记录已保留，请重试读取或重新配置。' : '请填写 Hub 地址并保存。');
+  settingsUI.open('connection');
+}
 else refresh();
+
+// Initialization is complete even while the first Hub read is pending.
+if (!window.TokenMonitorBoot || window.TokenMonitorBoot.ready()) {
+  try { nativeBridge.uiReady?.(); } catch (_) { /* Older APKs have no readiness handshake. */ }
+}

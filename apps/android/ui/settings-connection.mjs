@@ -45,7 +45,7 @@ export function createSettingsConnectionFlow({ bridge, getConfig, save, onState 
     if (!candidate) return;
     if (result.ok) { commit(); return; }
     const error = testErrors.has(result.error) ? result.error : 'test_failed';
-    const canSaveOffline = offlineErrors.has(error);
+    const canSaveOffline = !candidate.payload.recover && offlineErrors.has(error);
     if (!canSaveOffline) candidate = null;
     fail(result.source, error, undefined, canSaveOffline);
   }, testOptions);
@@ -63,7 +63,15 @@ export function createSettingsConnectionFlow({ bridge, getConfig, save, onState 
         fail('hub', 'connection_save_failed', '连接配置无法读取，请重试。');
         return false;
       }
-      try { next = settingsConnectionPayload(draft); }
+      const recovering = ['read_failed', 'key_unavailable'].includes(config.storageState);
+      try {
+        next = settingsConnectionPayload(draft);
+        if (recovering) {
+          if (draft.recover !== true) throw new Error('请确认重新配置后再测试并替换原记录。');
+          if (!draft.secret || draft.removeSecret) throw new Error('重新配置需填写新的 Hub 密钥。');
+          next.payload.recover = true;
+        }
+      }
       catch (error) {
         fail('hub', 'invalid_connection', error.message);
         return false;

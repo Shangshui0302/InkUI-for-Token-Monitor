@@ -3,125 +3,303 @@ package dev.tokenmonitor.eink;
 import android.app.Activity;
 import android.content.res.Configuration;
 import android.graphics.Bitmap;
+import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
+import android.view.Gravity;
 import android.view.View;
 import android.webkit.CookieManager;
 import android.webkit.JavascriptInterface;
+import android.webkit.RenderProcessGoneDetail;
+import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.TextView;
 import org.json.JSONObject;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.Proxy;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 /** The WebView can read packaged UI and two native GET routes only. */
 public final class MainActivity extends Activity {
-    private WebView webView;
+    private volatile WebView webView;
+    private FrameLayout viewport;
     private ConnectionStore connections;
     private DisplayRefreshController displayRefresh;
     private FullscreenController fullscreen;
     private DeviceStatusController deviceStatus;
     private volatile boolean foreground;
     private ConnectionTestController connectionTests;
+    private HubHttpClient dataRequests;
     private long connectionTestGeneration;
-    private final Set<HttpURLConnection> activeRequests = ConcurrentHashMap.newKeySet();
+    private volatile long webGeneration;
+    private final AtomicLong connectionEpoch = new AtomicLong();
+    private final Handler main = new Handler(Looper.getMainLooper());
+    private final RecoveryPermit recoveryPermit = new RecoveryPermit(SystemClock::elapsedRealtime);
+    private final WebViewRecoveryPolicy recoveryPolicy = new WebViewRecoveryPolicy(SystemClock::elapsedRealtime);
+    // An Abort can arrive before shouldInterceptRequest registers its native operation.
+    // Retain a small, expiring tombstone until that operation's total deadline has passed.
+    private final ConcurrentHashMap<String, Long> cancelledReads = new ConcurrentHashMap<>();
+    private boolean uiReady, recreateOnResume;
+    private Runnable startupTimeout;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         connections = new ConnectionStore(this);
-        connectionTests = new ConnectionTestController((body, source) -> {
-            validateResponse(body, "/api/stats");
-        }, MainActivity::classifyConnectionFailure);
-        webView = new WebView(this);
-        displayRefresh = new DisplayRefreshController(webView);
-        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
-        WebSettings settings = webView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setAllowFileAccess(false);
-        settings.setAllowContentAccess(false);
-        settings.setAllowFileAccessFromFileURLs(false);
-        settings.setAllowUniversalAccessFromFileURLs(false);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setJavaScriptCanOpenWindowsAutomatically(false);
-        settings.setSupportMultipleWindows(false);
-        settings.setMediaPlaybackRequiresUserGesture(true);
-        settings.setGeolocationEnabled(false);
-        settings.setSaveFormData(false);
-        settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
-        // Native fixed GETs also have no process-level cookie jar.
+        connectionTests = new ConnectionTestController((body, source) -> validateResponse(body, "/api/stats"),
+                MainActivity::classifyConnectionFailure);
+        dataRequests = new HubHttpClient(MainActivity::validateResponse, MainActivity::classifyConnectionFailure);
+        // The native GET transport also has no process-level cookie jar.
         java.net.CookieHandler.setDefault(null);
-        CookieManager.getInstance().setAcceptCookie(false);
-        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, false);
-        webView.setVerticalScrollBarEnabled(false);
-        webView.setHorizontalScrollBarEnabled(false);
-        webView.setOverScrollMode(View.OVER_SCROLL_NEVER);
-        webView.addJavascriptInterface(new ConnectionBridge(), "TokenMonitorAndroid");
-        webView.setWebViewClient(new LocalClient());
-        FrameLayout viewport = new FrameLayout(this);
-        viewport.addView(webView, new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        viewport = new FrameLayout(this);
+        viewport.setBackgroundColor(Color.WHITE);
         setContentView(viewport);
-        fullscreen = new FullscreenController(this, viewport, enabled -> deviceStatus.setFullscreen(enabled));
+        fullscreen = new FullscreenController(this, viewport,
+                enabled -> { if (deviceStatus != null) deviceStatus.setFullscreen(enabled); });
         deviceStatus = new DeviceStatusController(this, fullscreen.isEnabled(), this::dispatchDeviceStatus);
         if (android.os.Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
                     android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT, this::handleBack);
         }
-        webView.loadUrl(NativePolicy.LOCAL_ORIGIN + "/index.html");
+        createWebView();
+    }
+
+    private boolean currentView(long generation) {
+        return generation == webGeneration && webView != null && !isDestroyed() && !isFinishing();
+    }
+
+    private void createWebView() {
+        if (isDestroyed() || isFinishing()) return;
+        disposeWebView(false);
+        viewport.removeAllViews();
+        final long generation = ++webGeneration;
+        uiReady = false; recreateOnResume = false;
+        try {
+            CookieManager.getInstance().setAcceptCookie(false);
+            WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
+            WebView view = new WebView(this);
+            webView = view;
+            displayRefresh = new DisplayRefreshController(view);
+            WebSettings settings = view.getSettings();
+            settings.setJavaScriptEnabled(true);
+            settings.setDomStorageEnabled(true);
+            settings.setAllowFileAccess(false);
+            settings.setAllowContentAccess(false);
+            settings.setAllowFileAccessFromFileURLs(false);
+            settings.setAllowUniversalAccessFromFileURLs(false);
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
+            settings.setJavaScriptCanOpenWindowsAutomatically(false);
+            settings.setSupportMultipleWindows(false);
+            settings.setMediaPlaybackRequiresUserGesture(true);
+            settings.setGeolocationEnabled(false);
+            settings.setSaveFormData(false);
+            settings.setCacheMode(WebSettings.LOAD_NO_CACHE);
+            CookieManager.getInstance().setAcceptThirdPartyCookies(view, false);
+            view.setBackgroundColor(Color.WHITE);
+            view.setVerticalScrollBarEnabled(false);
+            view.setHorizontalScrollBarEnabled(false);
+            view.setOverScrollMode(View.OVER_SCROLL_NEVER);
+            view.addJavascriptInterface(new ConnectionBridge(generation), "TokenMonitorAndroid");
+            view.setWebViewClient(new LocalClient(generation));
+            viewport.addView(view, new FrameLayout.LayoutParams(-1, -1));
+            if (foreground) { view.onResume(); displayRefresh.resume(); }
+            view.loadUrl(NativePolicy.LOCAL_ORIGIN + "/index.html");
+            armStartupTimeout(generation);
+        } catch (RuntimeException unavailable) {
+            showFailure("webview_unavailable", false);
+        }
+    }
+
+    private void armStartupTimeout(long generation) {
+        clearStartupTimeout();
+        if (!foreground || uiReady || !currentView(generation)) return;
+        startupTimeout = () -> {
+            startupTimeout = null;
+            if (foreground && !uiReady && currentView(generation)) showFailure("startup_timeout", false);
+        };
+        main.postDelayed(startupTimeout, 10000);
+    }
+
+    private void clearStartupTimeout() {
+        if (startupTimeout != null) main.removeCallbacks(startupTimeout);
+        startupTimeout = null;
+    }
+
+    private void invalidateConnectionWork() {
+        connectionEpoch.incrementAndGet();
+        recoveryPermit.clear();
+        dataRequests.cancelAll();
+        // Test generation is owned by the main thread. Epoch invalidation is immediate
+        // on the JavaScript bridge thread, before this queued cleanup can run.
+        main.post(() -> { ++connectionTestGeneration; connectionTests.cancel(); });
+    }
+
+    private void disposeWebView(boolean rendererGone) {
+        clearStartupTimeout();
+        ++webGeneration;
+        invalidateConnectionWork();
+        WebView old = webView;
+        webView = null; uiReady = false;
+        if (displayRefresh != null) { displayRefresh.destroy(); displayRefresh = null; }
+        if (old != null) {
+            viewport.removeView(old);
+            if (!rendererGone) {
+                old.removeJavascriptInterface("TokenMonitorAndroid");
+                old.stopLoading();
+            }
+            // A terminated renderer's WebView is never loaded or reused again.
+            old.destroy();
+        }
+    }
+
+    private void showFailure(String code, boolean rendererGone) {
+        disposeWebView(rendererGone);
+        if (isDestroyed() || isFinishing()) return;
+        if (rendererGone && recoveryPolicy.allowAutomatic()) {
+            if (foreground) main.post(this::createWebView);
+            else recreateOnResume = true;
+            return;
+        }
+        recreateOnResume = false;
+        viewport.removeAllViews();
+        LinearLayout panel = new LinearLayout(this);
+        panel.setTag("inkui-recovery");
+        panel.setOrientation(LinearLayout.VERTICAL);
+        panel.setGravity(Gravity.CENTER);
+        int pad = Math.round(12 * getResources().getDisplayMetrics().density);
+        panel.setPadding(pad, pad, pad, pad);
+        panel.setBackgroundColor(Color.WHITE);
+        TextView title = new TextView(this);
+        title.setText("界面暂时无法显示"); title.setTextSize(20); title.setTextColor(Color.BLACK);
+        title.setGravity(Gravity.CENTER); title.setMaxLines(2);
+        panel.addView(title, new LinearLayout.LayoutParams(-1, 0, 1));
+        TextView detail = new TextView(this);
+        boolean unsupported = "unsupported_webview".equals(code);
+        detail.setText(unsupported ? "请更新 Android System WebView 后重试。连接配置已保留。"
+                : "连接配置已保留。重试后返回原阅读位置。");
+        detail.setTextSize(14); detail.setTextColor(Color.DKGRAY); detail.setGravity(Gravity.CENTER);
+        detail.setMaxLines(3);
+        panel.addView(detail, new LinearLayout.LayoutParams(-1, 0, 1));
+        Button retry = new Button(this);
+        retry.setTag("inkui-retry"); retry.setText("重试"); retry.setTextSize(18);
+        retry.setAllCaps(false); retry.setMinHeight(0); retry.setMinimumHeight(0);
+        retry.setOnClickListener(ignored -> createWebView());
+        panel.addView(retry, new LinearLayout.LayoutParams(-1, 0, 1));
+        viewport.addView(panel, new FrameLayout.LayoutParams(-1, -1));
     }
 
     private final class ConnectionBridge {
+        private final long generation;
+        ConnectionBridge(long generation) { this.generation = generation; }
         @JavascriptInterface public String getConnection() {
-            try { return connections.snapshot().publicJson().toString(); }
-            catch (Exception ignored) { return "{}"; }
+            if (!currentView(generation)) return "{}";
+            try { return connections.publicJson().toString(); }
+            catch (Exception ignored) { return "{\"storageState\":\"read_failed\"}"; }
         }
         @JavascriptInterface public String getAppInfo() {
             try {
-                JSONObject result = new JSONObject();
-                result.put("versionName", BuildConfig.VERSION_NAME);
-                result.put("versionCode", BuildConfig.VERSION_CODE);
-                return result.toString();
+                return new JSONObject().put("versionName", BuildConfig.VERSION_NAME)
+                        .put("versionCode", BuildConfig.VERSION_CODE).toString();
             } catch (Exception ignored) { return "{}"; }
         }
-        @JavascriptInterface public String saveConnection(String json) { return connections.save(json); }
+        @JavascriptInterface public String saveConnection(String json) {
+            if (!foreground || !currentView(generation)) return "{\"ok\":false,\"error\":\"cancelled\"}";
+            try {
+                String state = connections.storageState();
+                if ("read_failed".equals(state) || "key_unavailable".equals(state)) {
+                    JSONObject input = new JSONObject(json);
+                    ConnectionStore.Config candidate = connections.candidate(json);
+                    if (!Boolean.TRUE.equals(input.opt("recover")) || !recoveryPermit.consume(
+                            candidate.hubUrl, candidate.hubSecret, state, candidate.revision, connectionEpoch.get()))
+                        return "{\"ok\":false,\"error\":\"connection_recovery_required\"}";
+                }
+                String result = connections.save(json);
+                if (new JSONObject(result).optBoolean("ok")) invalidateConnectionWork();
+                return result;
+            } catch (Exception invalid) { return "{\"ok\":false,\"error\":\"invalid_connection\"}"; }
+        }
+        @JavascriptInterface public String reloadConnection() {
+            if (!foreground || !currentView(generation)) return "{\"ok\":false,\"error\":\"cancelled\"}";
+            invalidateConnectionWork();
+            return connections.reload();
+        }
         @JavascriptInterface public void testConnection(String payloadJson, String requestId) {
-            if (requestId == null || requestId.length() > 64 || !requestId.matches("[A-Za-z0-9_-]{1,64}")) return;
-            runOnUiThread(() -> startConnectionTest(payloadJson, requestId));
+            if (requestId == null || !requestId.matches("[A-Za-z0-9_-]{1,64}")) return;
+            main.post(() -> { if (currentView(generation)) startConnectionTest(payloadJson, requestId, generation); });
         }
         @JavascriptInterface public void cancelConnectionTest() {
-            runOnUiThread(() -> connectionTests.cancel());
+            recoveryPermit.clear();
+            main.post(() -> { if (currentView(generation)) { ++connectionTestGeneration; connectionTests.cancel(); } });
         }
-        @JavascriptInterface public String getDisplayCapabilities() { return displayRefresh.capabilities(); }
+        @JavascriptInterface public void cancelDataRequest(String id) {
+            if (!currentView(generation) || !validReadId(id)) return;
+            long now = SystemClock.elapsedRealtime();
+            synchronized (cancelledReads) {
+                cancelledReads.entrySet().removeIf(entry -> now - entry.getValue() >= 30000);
+                if (cancelledReads.size() >= 256 && !cancelledReads.containsKey(id)) {
+                    // Excess cancellation traffic fails closed for current operations.
+                    invalidateConnectionWork(); cancelledReads.clear();
+                }
+                cancelledReads.put(id, now);
+            }
+            dataRequests.cancel(id);
+        }
+        @JavascriptInterface public String getDisplayCapabilities() {
+            DisplayRefreshController controller = displayRefresh;
+            return currentView(generation) && controller != null ? controller.capabilities() : "{}";
+        }
         @JavascriptInterface public String getDeviceStatus() { return deviceStatus.snapshotJson(); }
         @JavascriptInterface public void setFullscreen(boolean enabled) {
-            runOnUiThread(() -> { if (!isDestroyed()) fullscreen.setEnabled(enabled); });
+            main.post(() -> { if (currentView(generation)) fullscreen.setEnabled(enabled); });
         }
         @JavascriptInterface public void requestDisplayRefresh(String reason) {
-            runOnUiThread(() -> displayRefresh.request(reason));
+            main.post(() -> { if (currentView(generation) && displayRefresh != null) displayRefresh.request(reason); });
+        }
+        @JavascriptInterface public void uiReady() {
+            main.post(() -> {
+                if (!currentView(generation)) return;
+                uiReady = true; clearStartupTimeout();
+                deviceStatus.pageReady(); dispatchVisibility();
+                displayRefresh.request("content");
+            });
+        }
+        @JavascriptInterface public void uiFailed(String code) {
+            if (!"unsupported_webview".equals(code) && !"bootstrap_error".equals(code) && !"module_load_error".equals(code)) return;
+            main.post(() -> { if (currentView(generation)) showFailure(code, false); });
         }
     }
 
     private final class LocalClient extends WebViewClient {
-        @Override public void onPageStarted(WebView view, String url, Bitmap favicon) { deviceStatus.pageLoading(); }
+        private final long generation;
+        LocalClient(long generation) { this.generation = generation; }
+        @Override public void onPageStarted(WebView view, String url, Bitmap favicon) {
+            if (currentView(generation)) deviceStatus.pageLoading();
+        }
         @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) { return true; }
         @Override public boolean shouldOverrideUrlLoading(WebView view, String url) { return true; }
         @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+            if (!currentView(generation)) return error(409, "connection_changed");
             if (!NativePolicy.isLocalRequest(request.getUrl().toString())) return error(403, "request_blocked");
             if (!"GET".equals(request.getMethod())) return error(405, "method_not_allowed");
             String path = request.getUrl().getEncodedPath();
-            if (NativePolicy.ROUTES.contains(path)) return proxy(path);
+            if (NativePolicy.ROUTES.contains(path)) {
+                String id = null;
+                for (Map.Entry<String, String> header : request.getRequestHeaders().entrySet())
+                    if ("X-InkUI-Request-Id".equalsIgnoreCase(header.getKey())) id = header.getValue();
+                return proxy(path, id, generation);
+            }
             if (!NativePolicy.ASSETS.contains(path)) return error(404, "not_found");
             try {
                 String mime = path.endsWith(".css") ? "text/css" : path.endsWith(".html") ? "text/html" : "application/javascript";
@@ -129,54 +307,38 @@ public final class MainActivity extends Activity {
             } catch (Exception ignored) { return error(503, "ui_unavailable"); }
         }
         @Override public void onPageFinished(WebView view, String url) {
-            dispatchVisibility();
-            deviceStatus.pageReady();
-            displayRefresh.request("content");
+            if (currentView(generation)) dispatchVisibility();
+        }
+        @Override public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError failure) {
+            if (request.isForMainFrame() && currentView(generation)) showFailure("page_load_failed", false);
+        }
+        @Override public void onReceivedHttpError(WebView view, WebResourceRequest request, WebResourceResponse failure) {
+            if (request.isForMainFrame() && currentView(generation)) showFailure("page_load_failed", false);
+        }
+        @Override public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+            if (view == webView && currentView(generation)) showFailure("renderer_gone", true);
+            // Stale instances have already been removed and destroyed by disposeWebView.
+            return true;
         }
     }
 
-    private WebResourceResponse proxy(String path) {
+    private static boolean validReadId(String id) { return id != null && id.matches("read-[A-Za-z0-9_-]{1,58}"); }
+    private WebResourceResponse proxy(String path, String id, long generation) {
+        if (!validReadId(id)) return error(400, "invalid_request");
         ConnectionStore.Config config = connections.snapshot();
+        long epoch = connectionEpoch.get();
         if (!foreground) return error(503, "app_background");
-        if (!NativePolicy.ROUTES.contains(path)) return error(404, "not_found");
-        String origin = config.hubUrl;
-        String secret = config.hubSecret;
-        if (origin.isEmpty()) return error(503, "hub_unconfigured");
-        HttpURLConnection upstream = null;
-        WebResourceResponse result;
-        try {
-            upstream = (HttpURLConnection) new URL(origin + path).openConnection(Proxy.NO_PROXY);
-            upstream.setInstanceFollowRedirects(false);
-            upstream.setConnectTimeout(8000);
-            upstream.setReadTimeout(8000);
-            upstream.setUseCaches(false);
-            upstream.setRequestMethod("GET");
-            upstream.setRequestProperty("Accept", "application/json");
-            upstream.setRequestProperty("Accept-Encoding", "identity");
-            if (!secret.isEmpty()) upstream.setRequestProperty("Authorization", "Bearer " + secret);
-            activeRequests.add(upstream);
-            if (!foreground || !connections.isCurrent(config)) return error(409, "connection_changed");
-            int status = upstream.getResponseCode();
-            // WebResourceResponse cannot represent redirects; never expose Location or a remote body.
-            if (status >= 300 && status <= 399) result = error(502, "upstream_redirect_blocked");
-            else if (status == 401 || status == 403) result = error(502, "hub_unauthorized");
-            else if (status != 200) result = error(502, "hub_http_error");
-            else if (upstream.getContentLengthLong() > NativePolicy.MAX_RESPONSE_BYTES) result = error(502, "response_too_large");
-            else {
-                byte[] body;
-                try (InputStream in = upstream.getInputStream()) { body = NativePolicy.readLimited(in); }
-                JSONObject data = validateResponse(body, path);
-                result = json(200, data.toString());
-            }
-        } catch (org.json.JSONException | IllegalArgumentException ignored) { result = error(502, "invalid_response"); }
-        catch (Exception failure) { result = error(503, "response_limit".equals(failure.getMessage())
-                ? "response_too_large" : "hub_" + classifyConnectionFailure(failure)); }
-        finally {
-            if (upstream != null) { activeRequests.remove(upstream); upstream.disconnect(); }
-        }
-        if (!connections.isCurrent(config)) return error(409, "connection_changed");
+        if (config.hubUrl.isEmpty()) return error(503, "hub_unconfigured");
+        HubHttpClient.Result result = dataRequests.execute(id, config.hubUrl, config.hubSecret, path,
+                () -> foreground && currentView(generation) && connectionEpoch.get() == epoch
+                        && connections.isCurrent(config) && !cancelledReads.containsKey(id));
+        if (!currentView(generation) || connectionEpoch.get() != epoch || !connections.isCurrent(config))
+            return error(409, "connection_changed");
         if (!foreground) return error(503, "app_background");
-        return result;
+        if (result.error == null) return response(200, "application/json", new ByteArrayInputStream(result.body));
+        if ("redirect_blocked".equals(result.error)) return error(502, "upstream_redirect_blocked");
+        if ("invalid_response".equals(result.error)) return error(502, "invalid_response");
+        return error(503, "hub_" + result.error);
     }
 
     private static JSONObject validateResponse(byte[] body, String path) throws org.json.JSONException {
@@ -196,36 +358,34 @@ public final class MainActivity extends Activity {
         return ConnectionTestController.classifyFailure(failure);
     }
 
-    private void startConnectionTest(String input, String requestId) {
+    private void startConnectionTest(String input, String requestId, long renderer) {
         if (isDestroyed()) return;
         long generation = ++connectionTestGeneration;
-        connectionTests.cancel();
-        String source = "hub";
+        long epoch = connectionEpoch.get();
+        recoveryPermit.clear(); connectionTests.cancel();
         String origin = "";
         try {
             if (input == null || input.length() > 24576) throw new IllegalArgumentException();
             JSONObject data = new JSONObject(input);
-            Object selected = data.opt("source");
-            if (!"hub".equals(selected)) throw new IllegalArgumentException();
-            Object selectedUrl = data.opt("hubUrl");
-            if (!(selectedUrl instanceof String)) throw new IllegalArgumentException();
-            origin = NativePolicy.normalizeOrigin((String) selectedUrl);
-            // Parse through the same origin/credential policy as saving, without changing the store.
+            if (!"hub".equals(data.opt("source")) || !(data.opt("hubUrl") instanceof String)) throw new IllegalArgumentException();
+            origin = NativePolicy.normalizeOrigin((String) data.opt("hubUrl"));
             ConnectionStore.Config candidate = connections.candidate(input);
-            String secret = candidate.hubSecret;
+            String state = connections.storageState();
+            boolean recovering = Boolean.TRUE.equals(data.opt("recover"))
+                    && ("read_failed".equals(state) || "key_unavailable".equals(state));
             if (!foreground) return;
-            connectionTests.start(requestId, source, origin, secret,
-                    () -> foreground && connections.isCurrent(candidate),
-                    result -> runOnUiThread(() -> {
-                        if (generation != connectionTestGeneration || !foreground || isDestroyed()) return;
-                        // Saving can race with a worker finishing or its queued UI callback.
-                        String error = connections.isCurrent(candidate) ? result.error : "cancelled";
+            connectionTests.start(requestId, "hub", origin, candidate.hubSecret,
+                    () -> foreground && currentView(renderer) && epoch == connectionEpoch.get() && connections.isCurrent(candidate),
+                    result -> main.post(() -> {
+                        if (generation != connectionTestGeneration || !foreground || !currentView(renderer) || epoch != connectionEpoch.get()) return;
+                        String failure = connections.isCurrent(candidate) ? result.error : "cancelled";
+                        if (failure == null && recovering && state.equals(connections.storageState()))
+                            recoveryPermit.issue(candidate.hubUrl, candidate.hubSecret, state, candidate.revision, epoch);
                         dispatchConnectionTest(new ConnectionTestController.Result(result.id, result.source,
-                                result.origin, error, result.latencyMs));
+                                result.origin, failure, result.latencyMs));
                     }));
         } catch (Exception invalid) {
-            if (foreground) dispatchConnectionTest(new ConnectionTestController.Result(
-                    requestId, source, origin, "invalid_connection", 0));
+            if (foreground) dispatchConnectionTest(new ConnectionTestController.Result(requestId, "hub", origin, "invalid_connection", 0));
         }
     }
 
@@ -235,14 +395,11 @@ public final class MainActivity extends Activity {
             JSONObject detail = new JSONObject().put("id", result.id).put("ok", result.ok)
                     .put("source", result.source).put("origin", result.origin).put("latencyMs", result.latencyMs);
             if (result.error != null) detail.put("error", result.error);
-            webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('tokenmonitor:connection-test',{detail:"
-                    + detail + "}))", null);
+            webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('tokenmonitor:connection-test',{detail:" + detail + "}))", null);
         } catch (org.json.JSONException ignored) { }
     }
 
-    private static WebResourceResponse error(int status, String code) {
-        return json(status, "{\"error\":\"" + code + "\"}");
-    }
+    private static WebResourceResponse error(int status, String code) { return json(status, "{\"error\":\"" + code + "\"}"); }
     private static WebResourceResponse json(int status, String body) {
         return response(status, "application/json", new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
     }
@@ -255,31 +412,24 @@ public final class MainActivity extends Activity {
     }
 
     private void dispatchVisibility() {
-        if (webView != null) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('tokenmonitor:visibility',{detail:{hidden:"
-                + (!foreground) + "}}))", null);
+        if (webView != null) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('tokenmonitor:visibility',{detail:{hidden:" + (!foreground) + "}}))", null);
     }
     private void dispatchDeviceStatus(String json) {
-        if (!foreground || webView == null) return;
-        webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('tokenmonitor:device-status',{detail:"
-                + json + "}))", null);
+        if (foreground && webView != null) webView.evaluateJavascript("window.dispatchEvent(new CustomEvent('tokenmonitor:device-status',{detail:" + json + "}))", null);
     }
     @Override protected void onResume() {
         super.onResume(); foreground = true;
-        if (webView != null) {
-            webView.onResume();
-            displayRefresh.resume();
-            fullscreen.resume();
-            deviceStatus.start();
-            dispatchVisibility();
+        fullscreen.resume(); deviceStatus.start();
+        if (recreateOnResume) createWebView();
+        else if (webView != null) {
+            webView.onResume(); displayRefresh.resume(); dispatchVisibility(); armStartupTimeout(webGeneration);
         }
     }
     @Override protected void onPause() {
-        foreground = false; ++connectionTestGeneration; dispatchVisibility();
-        if (connectionTests != null) connectionTests.cancel();
+        foreground = false; invalidateConnectionWork(); dispatchVisibility(); clearStartupTimeout();
         if (deviceStatus != null) deviceStatus.stop();
         if (fullscreen != null) fullscreen.pause();
         if (displayRefresh != null) displayRefresh.pause();
-        for (HttpURLConnection request : activeRequests) request.disconnect();
         if (webView != null) webView.onPause();
         super.onPause();
     }
@@ -291,23 +441,22 @@ public final class MainActivity extends Activity {
         super.onConfigurationChanged(configuration);
         if (fullscreen != null) fullscreen.configurationChanged();
     }
-    @Override public void onBackPressed() {
-        handleBack();
-    }
+    // API 33+ uses the framework OnBackInvokedDispatcher registered in onCreate.
+    // Retain this callback only for API 29-32 without adding AndroidX to the runtime.
+    @android.annotation.SuppressLint("GestureBackNavigation")
+    @Override public void onBackPressed() { handleBack(); }
     private void handleBack() {
-        webView.evaluateJavascript("Boolean(window.tokenMonitorBack?.())", handled -> {
-            if (!"true".equals(handled)) moveTaskToBack(true);
+        if (webView == null) { moveTaskToBack(true); return; }
+        final long generation = webGeneration;
+        webView.evaluateJavascript("Boolean(window.tokenMonitorBack && window.tokenMonitorBack())", handled -> {
+            if (currentView(generation) && !"true".equals(handled)) moveTaskToBack(true);
         });
     }
     @Override protected void onDestroy() {
-        foreground = false; ++connectionTestGeneration;
-        if (connectionTests != null) connectionTests.destroy();
-        if (deviceStatus != null) deviceStatus.stop();
-        if (fullscreen != null) fullscreen.destroy();
-        if (displayRefresh != null) displayRefresh.destroy();
-        if (webView != null) {
-            webView.removeJavascriptInterface("TokenMonitorAndroid"); webView.stopLoading(); webView.destroy(); webView = null;
-        }
+        foreground = false;
+        disposeWebView(false);
+        connectionTests.destroy(); dataRequests.close();
+        deviceStatus.stop(); fullscreen.destroy();
         super.onDestroy();
     }
 }

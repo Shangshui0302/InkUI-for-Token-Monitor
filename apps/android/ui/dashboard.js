@@ -6,6 +6,7 @@ import { trendGeometry } from './charts.mjs';
 import { providerQuotaEntries, quotaPresentation, providerQuotaPairs, quotaWindowPairs, quotaAmount, quotaCompactNumber, quotaFigure } from './quota-presentation.mjs';
 import { planQuotaPages, planQuotaMetrics, QUOTA_DIAL_ASPECT } from './quota-layout.mjs';
 import { providerOrderIds, orderedProviderIndices, mergeProviderOrder, createProviderOrderStore } from './provider-order.mjs';
+import { createReadingStateStore, readingProviderIds, restoreReadingProvider } from './ui-state.mjs';
 
 const finite = value => typeof value === 'number' && Number.isFinite(value);
 const number = new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 2 });
@@ -58,12 +59,28 @@ export function createDashboard(host, onDisplayChange = () => {}) {
   let orderStorage;
   try { orderStorage = window.localStorage; } catch (_) { /* Saving reports unavailable storage. */ }
   const orderStore = createProviderOrderStore(orderStorage);
+  const readingStore = createReadingStateStore(orderStorage);
+  let pendingReading = null;
   let orderSource = '', savedOrder = [], orderEditor = null, orderFollow = null;
   const quotaTextMeasure = document.createElement('canvas').getContext('2d');
   const positions = {};
   let resizeFrame = 0;
   const shade = index => 'var(--heat-' + Math.max(3, 15 - index * 3) + ')';
   function key() { return orderEditor ? 'provider-order' : drill ? 'drill' : page + ':' + period + ':' + (page === 'details' ? detailKind : page === 'activity' ? activityKind : page === 'sessions' ? runningOnly : page === 'limits' ? (providerPicker ? 'providers' : 'windows:' + providerKey) : ''); }
+  function readingKey() { return page + ':' + period + ':' + (page === 'details' ? detailKind : page === 'activity' ? activityKind : page === 'sessions' ? runningOnly : 'windows:' + providerKey); }
+  function readingState() {
+    return { page, period, activityKind, detailKind, runningOnly,
+      providerId: data ? readingProviderIds(data.stats.limits.providers)[providerKey] || null : pendingReading?.providerId || null,
+      index: pendingReading ? pendingReading.index : positions[readingKey()] || 0 };
+  }
+  function syncNavigation() {
+    document.querySelectorAll('#navigation [data-page]').forEach(button => {
+      if (button.dataset.page === page) button.setAttribute('aria-current', 'page');
+      else button.removeAttribute('aria-current');
+    });
+    document.getElementById('period').value = period;
+    document.querySelectorAll('[data-period]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.period === period)));
+  }
   function actionButton(label, fn, className = 'dash-tab') {
     const b = el('button', label, className); b.type = 'button';
     b.dataset.focusKey = key() + ':' + className + ':' + (label || '');
@@ -432,6 +449,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     graphic.append(legend); button.append(graphic); surface.append(button);
   }
   function render(reason = 'page') {
+    syncNavigation();
     const focused = host.contains(document.activeElement) ? document.activeElement : null;
     host.closest('#app')?.toggleAttribute('data-provider-order', Boolean(orderEditor));
     actions = [];
@@ -522,7 +540,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     else if(chart)renderChart(body,width,available,font);
     else {
       if(!rows.length)rows.push(row('暂无记录','—',period==='allTime'?'可切换本月或查看来源':'当前时段没有数据'));
-      pageCount=Math.max(1,Math.ceil(rows.length/size));currentIndex=Math.max(0,Math.min(positions[key()]||0,pageCount-1));positions[key()]=currentIndex;
+      pageCount=Math.max(1,Math.ceil(rows.length/size));currentIndex=Math.max(0,Math.min(positions[key()]||0,pageCount-1));if(data)positions[key()]=currentIndex;
       body.dataset.layout=layout;body.style.gridTemplateColumns='repeat('+columns+',minmax(0,1fr))';body.style.gridTemplateRows='repeat('+Math.min(perColumn, Math.ceil(Math.min(size, rows.length - currentIndex * size) / columns))+',minmax(0,1fr))';
       if(available<rowHeight){body.classList.add('dash-cramped');body.style.fontSize=Math.max(1,Math.min(font,available/1.4))+'px';}
       rows.slice(currentIndex*size,(currentIndex+1)*size).forEach(item=>body.append(typeof item==='function'?item():item));
@@ -543,6 +561,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
       }
     }
     updatePager();
+    if (!drill && !orderEditor && !providerPicker) readingStore.save(orderSource, readingState());
     if(changed)onDisplayChange(reason);
   }
   function drawTrend(svg, daily, start, end, width, height, offset = 0, font = 12) {
@@ -616,9 +635,9 @@ export function createDashboard(host, onDisplayChange = () => {}) {
   });
   host.addEventListener('click',event=>{const button=event.target.closest('[data-dash-action]');if(button&&host.contains(button)&&actions[Number(button.dataset.dashAction)])actions[Number(button.dataset.dashAction)]();});
   document.querySelectorAll('#navigation [data-page]').forEach(button=>button.addEventListener('click',()=>{
-    orderEditor=null;orderFollow=null;page=button.dataset.page;drill=null;document.querySelectorAll('#navigation [data-page]').forEach(n=>{if(n.dataset.page===page)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});render();
+    orderEditor=null;orderFollow=null;if(pendingReading && page!==button.dataset.page)pendingReading.index=0;page=button.dataset.page;drill=null;document.querySelectorAll('#navigation [data-page]').forEach(n=>{if(n.dataset.page===page)n.setAttribute('aria-current','page');else n.removeAttribute('aria-current');});render();
   }));
-  document.getElementById('period').addEventListener('change',event=>{period=event.target.value;drill=null;render();});
+  document.getElementById('period').addEventListener('change',event=>{if(pendingReading && period!==event.target.value)pendingReading.index=0;period=event.target.value;drill=null;render();});
   const prev=document.getElementById('page-prev'),next=document.getElementById('page-next');if(prev)prev.addEventListener('click',()=>turn(-1));if(next)next.addEventListener('click',()=>turn(1));
   const resize=()=>{if(resizeFrame)cancelAnimationFrame(resizeFrame);resizeFrame=requestAnimationFrame(()=>{resizeFrame=0;render();});};
   if(typeof ResizeObserver!=='undefined')new ResizeObserver(resize).observe(host);else window.addEventListener('resize',resize);
@@ -632,17 +651,24 @@ export function createDashboard(host, onDisplayChange = () => {}) {
       try { const url = new URL(hubUrl); if (['http:', 'https:'].includes(url.protocol)) source = url.origin; } catch (_) { /* Unconfigured Hub. */ }
       if (source === orderSource) return;
       orderSource = source; savedOrder = orderStore.load(source);
+      data = null; drill = null; providerKey = null; providerPicker = false;
       orderEditor = null; orderFollow = null; quotaGeometry = null;
-      Object.keys(positions).filter(key => key.startsWith('limits:') || key === 'provider-order').forEach(key => delete positions[key]);
+      Object.keys(positions).forEach(key => delete positions[key]);
+      pendingReading = readingStore.load(source);
+      ({ page, period, activityKind, detailKind, runningOnly } = pendingReading);
       render('content');
     },
     update(stats, history, nextContext) {
-      // Input indices are page-local, not account IDs. Reconcile a selection when
-      // a refreshed Hub snapshot reorders accounts; ambiguous labels return to all.
-      if (providerKey !== null && data && stats !== data.stats) {
-        const identity = providerIdentity(data.stats.limits.providers[providerKey]);
-        const matches = (stats?.limits?.providers || []).map((p, index) => ({ p, index })).filter(({ p }) => providerIdentity(p) === identity);
-        providerKey = matches.length === 1 ? matches[0].index : null;
+      // Reconcile via the same stable, ambiguity-safe identity used by order storage.
+      if (pendingReading && stats) {
+        providerKey = restoreReadingProvider(pendingReading.providerId, stats.limits.providers);
+        // Unknown selection returns to all providers and starts at its first page.
+        positions[readingKey()] = page === 'limits' && pendingReading.providerId && providerKey === null ? 0 : pendingReading.index;
+        pendingReading = null;
+      } else if (providerKey !== null && data && stats !== data.stats) {
+        const id = readingProviderIds(data.stats.limits.providers)[providerKey], previousIndex = positions[readingKey()] || 0;
+        providerKey = restoreReadingProvider(id, stats?.limits?.providers || []);
+        positions[readingKey()] = page === 'limits' && providerKey === null ? 0 : previousIndex;
       }
       data = stats ? { stats, history } : null; context = nextContext || {}; render('content');
     },
@@ -654,6 +680,6 @@ export function createDashboard(host, onDisplayChange = () => {}) {
       else return false;
       render(); return true;
     },
-    clear() { data = null; drill = null; providerKey = null; providerPicker = false; orderEditor = null; orderFollow = null; render(); }
+    clear() { pendingReading = readingState(); data = null; drill = null; providerKey = null; providerPicker = false; orderEditor = null; orderFollow = null; render(); }
   };
 }

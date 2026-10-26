@@ -1,0 +1,197 @@
+name: Android verification
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Install pinned Android build platform
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Native checks, every UI test, lint, and debug APKs
+        # check depends on checkEink, which discovers every native main and Node test.
+        run: apps/android/gradlew --no-daemon --console=plain -p apps/android :app:check :app:assembleDebug :app:assembleDebugAndroidTest
+      - name: Verify delivered debug APK metadata, signature, and source assets
+        run: tools/build-eink-apk.sh debug
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android-checks-and-debug
+          path: |
+            apps/android/app/build/reports/
+            output/android/*.apk
+            output/android/*.sha256
+          if-no-files-found: warn
+          retention-days: 7
+
+  instrumentation:
+    needs: check-and-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [29, 36]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Install pinned Android build platform
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Enable emulator KVM access
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise real Android APIs on API ${{ matrix.api }}
+        # Resolved v2 annotated tag to its commit; inputs checked against action.yml.
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: ${{ matrix.api }}
+          arch: x86_64
+          target: google_apis
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          script: bash -ec 'if [ "${{ matrix.api }}" = 29 ]; then tools/setup-ci-webview.sh; fi; apps/android/gradlew --no-daemon --console=plain -p apps/android :app:connectedDebugAndroidTest'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: always()
+        with:
+          name: android-instrumentation-api-${{ matrix.api }}
+          path: |
+            apps/android/app/build/reports/androidTests/
+            apps/android/app/build/outputs/androidTest-results/
+          if-no-files-found: warn
+          retention-days: 7
+
+  release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: [check-and-build, instrumentation]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    permissions:
+      contents: write
+    env:
+      TOKEN_MONITOR_RELEASE_TAG: ${{ github.ref_name }}
+      TOKEN_MONITOR_PREVIOUS_VERSION_CODE: '13'
+      TOKEN_MONITOR_CERT_SHA256: 0ce7fbe63f0cc2db9ef02dbad4fa760f5f74739f9bd22681bb0160199fbe7dc9
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Require a release tag reachable from main before accessing signing inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TOKEN_MONITOR_RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+      - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+      - name: Install pinned Android build platform
+        run: sdkmanager 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Prepare private signing files
+        env:
+          INKUI_KEYSTORE_BASE64: ${{ secrets.INKUI_KEYSTORE_BASE64 }}
+          INKUI_STORE_PASSWORD: ${{ secrets.INKUI_STORE_PASSWORD }}
+          INKUI_KEY_ALIAS: ${{ secrets.INKUI_KEY_ALIAS }}
+          INKUI_KEY_PASSWORD: ${{ secrets.INKUI_KEY_PASSWORD }}
+        run: |
+          umask 077
+          python3 tools/prepare-ci-signing.py "$RUNNER_TEMP/inkui-signing"
+      - name: Build and verify the signed release APK
+        env:
+          TOKEN_MONITOR_SIGNING_FILE: ${{ runner.temp }}/inkui-signing/release.properties
+        run: tools/build-eink-apk.sh release
+      - name: Prepare verified public assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd output/android
+          apk="inkui-${TOKEN_MONITOR_RELEASE_TAG#v}-code14-release.apk"
+          test -f "$apk"
+          sha256sum "$apk" > SHA256SUMS
+          cat > "$RUNNER_TEMP/inkui-release-notes.md" <<'NOTES'
+          修复墨水屏客户端的 Android 稳定性与恢复流程。
+
+          - 界面渲染异常后安全重建，恢复页面、筛选与分页位置。
+          - 原生请求使用总超时、及时取消与进程级并发限制。
+          - 配置或密钥不可读时明确提示，成功测试后才能重新配置。
+          - 全部界面、原生与发布检查，以及 Android 10／16 框架测试通过后签名发布。
+
+          使用原有长期签名，可覆盖升级并保留配置。安装包最低支持 Android 10；SHA256SUMS 用于校验下载文件。
+          NOTES
+      - name: Publish only after all checks, preserving an existing public release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$TOKEN_MONITOR_RELEASE_TAG"
+          apk="inkui-${tag#v}-code14-release.apk"
+          assets="$GITHUB_WORKSPACE/output/android"
+          remote_assets="$(mktemp -d "$RUNNER_TEMP/inkui-release-XXXXXXXX")"
+          trap 'rm -rf -- "$remote_assets"' EXIT
+          existing=false
+          if gh release view "$tag" --json isDraft,assets > "$remote_assets/release.json"; then
+            existing=true
+            if [[ "$(python3 -c 'import json,sys; print(str(json.load(open(sys.argv[1]))["isDraft"]).lower())' "$remote_assets/release.json")" == false ]]; then
+              python3 - "$remote_assets/release.json" "$apk" <<'PY'
+          import json, sys
+          names = sorted(asset['name'] for asset in json.load(open(sys.argv[1]))['assets'])
+          if names != sorted([sys.argv[2], 'SHA256SUMS']):
+              sys.exit('Existing public release assets differ; refusing to modify it')
+          PY
+              gh release download "$tag" --dir "$remote_assets" --pattern "$apk" --pattern SHA256SUMS
+              cmp "$assets/$apk" "$remote_assets/$apk"
+              cmp "$assets/SHA256SUMS" "$remote_assets/SHA256SUMS"
+              echo 'Existing public release contains identical verified assets; nothing to change.'
+              exit 0
+            fi
+          fi
+          if [[ "$existing" == false ]]; then
+            gh release create "$tag" --verify-tag --draft --title "InkUI for Token-Monitor ${tag}" --notes-file "$RUNNER_TEMP/inkui-release-notes.md"
+          fi
+          gh release upload "$tag" "$assets/$apk" "$assets/SHA256SUMS" --clobber
+          gh release view "$tag" --json assets > "$remote_assets/release.json"
+          python3 - "$remote_assets/release.json" "$apk" <<'PY'
+          import json, sys
+          names = sorted(asset['name'] for asset in json.load(open(sys.argv[1]))['assets'])
+          if names != sorted([sys.argv[2], 'SHA256SUMS']):
+              sys.exit('Draft release has unexpected assets; refusing to publish it')
+          PY
+          gh release download "$tag" --dir "$remote_assets" --pattern "$apk" --pattern SHA256SUMS
+          cmp "$assets/$apk" "$remote_assets/$apk"
+          cmp "$assets/SHA256SUMS" "$remote_assets/SHA256SUMS"
+          gh release edit "$tag" --draft=false --latest
+      - name: Remove private signing files
+        if: always()
+        run: rm -rf -- "$RUNNER_TEMP/inkui-signing"

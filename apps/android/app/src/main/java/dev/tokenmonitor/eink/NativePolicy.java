@@ -15,7 +15,7 @@ final class NativePolicy {
     static final String LOCAL_ORIGIN = "https://appassets.androidplatform.net";
     static final int MAX_RESPONSE_BYTES = 8 * 1024 * 1024;
     static final Set<String> ASSETS = immutableSet("/index.html", "/styles.css", "/themes.css",
-            "/dashboard.css", "/app.js", "/model.mjs", "/dashboard-model.mjs",
+            "/dashboard.css", "/app.js", "/boot.js", "/ui-state.mjs", "/model.mjs", "/dashboard-model.mjs",
             "/dashboard.js", "/theme.mjs", "/connection.mjs", "/connection-recovery.mjs", "/transport.mjs", "/charts.mjs", "/quota-presentation.mjs", "/quota-layout.mjs", "/provider-order.mjs", "/gestures.mjs", "/display.mjs", "/icons.mjs", "/device-status.mjs", "/settings.css", "/settings.js", "/settings-connection.mjs");
     static final Set<String> ROUTES = immutableSet("/api/stats", "/api/history");
 

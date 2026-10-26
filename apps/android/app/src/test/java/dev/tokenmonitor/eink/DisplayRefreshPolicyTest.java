@@ -51,7 +51,6 @@ public final class DisplayRefreshPolicyTest {
         contentRefreshBudget();
         mixedRefreshBudget();
         fullRefreshResetsBudget();
-        OnyxDisplayBackendTest.main(args);
         System.out.println("Display refresh policy checks passed");
     }
 

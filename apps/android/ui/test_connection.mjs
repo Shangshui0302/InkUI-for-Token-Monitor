@@ -4,7 +4,7 @@ import { publicConnection, connectionPayload, sourceKey, createSourceFence } fro
 import { nativeConnection, saveNativeConnection, createTransport } from './transport.mjs';
 test('native projection cannot expose extra credential fields', () => {
   const value = publicConnection({ hubUrl: 'http://hub:9000', hubSecret: 'secret', hasHubSecret: true, revision: '2' });
-  assert.deepEqual(Object.keys(value), ['hubUrl', 'hasHubSecret', 'revision']);
+  assert.deepEqual(Object.keys(value), ['hubUrl', 'hasHubSecret', 'revision', 'storageState']);
   assert.equal(JSON.stringify(value).includes('secret'), false);
   assert.equal(nativeConnection({ getConnection: () => JSON.stringify(value) }).hasHubSecret, true);
 });
@@ -137,4 +137,15 @@ test('test result copy distinguishes successful unsaved input and actionable fai
   assert.match(connectionTestMessage({ error: 'host_not_found' }), /局域网 IP/);
   assert.match(connectionTestMessage({ error: 'connection_refused' }), /服务已启动/);
   assert.equal(connectionTestMessage({ error: 'private-data' }).includes('private-data'), false);
+});
+
+test('storage projection distinguishes unreadable records without exposing native exception details', () => {
+  for (const storageState of ['unconfigured', 'ready', 'read_failed', 'key_unavailable']) {
+    const value = publicConnection({ storageState, error: 'sensitive-error', keyAlias: 'sensitive-alias' });
+    assert.equal(value.storageState, storageState);
+    assert.equal(JSON.stringify(value).includes('sensitive'), false);
+  }
+  assert.equal(publicConnection({ hubUrl: 'http://hub' }).storageState, 'ready');
+  assert.equal(publicConnection({ storageState: 'sensitive-error' }).storageState, 'unconfigured');
+  assert.notEqual(sourceKey(publicConnection({ revision: '0' })), sourceKey(publicConnection({ revision: '0', storageState: 'read_failed' })));
 });

@@ -8,15 +8,18 @@ if (signingFile != null) {
         if (!signingProperties.getProperty(it)) throw new GradleException('Missing release signing property: ' + it)
     }
 }
-if (gradle.startParameter.taskNames.any { it.toLowerCase().contains('release') } && signingFile == null) {
-    throw new GradleException('Release requires -PtokenMonitorSigningFile=/absolute/path/to/private.properties')
+// Checks and lint can inspect release code without possessing a signing key.
+// Actual release packaging must never silently fall back to an unsigned APK.
+gradle.taskGraph.whenReady { graph ->
+    if (signingFile == null && graph.allTasks.any {
+        it.project == project && it.name in ['packageRelease', 'bundleRelease']
+    }) throw new GradleException('Release requires -PtokenMonitorSigningFile=/absolute/path/to/private.properties')
 }
 
 def einkAssets = tasks.register('stageEinkAssets', Sync) {
     from('../ui') {
-        include 'index.html', 'styles.css', 'themes.css', 'dashboard.css', 'app.js',
-                'model.mjs', 'dashboard-model.mjs', 'dashboard.js', 'theme.mjs',
-                'connection.mjs', 'connection-recovery.mjs', 'transport.mjs', 'charts.mjs', 'quota-presentation.mjs', 'quota-layout.mjs', 'provider-order.mjs', 'gestures.mjs', 'display.mjs', 'icons.mjs', 'device-status.mjs', 'settings.css', 'settings.js', 'settings-connection.mjs'
+        include '*.html', '*.css', '*.js', '*.mjs'
+        exclude 'test_*.mjs'
     }
     into layout.buildDirectory.dir('generated/einkAssets')
 }
@@ -30,8 +33,9 @@ android {
         targetSdk 36
         // Keep the planned release name during development; only new distributed
         // builds advance versionCode. Do not bump SemVer for each UI iteration.
-        versionCode 12
-        versionName '1.0.0'
+        versionCode 14
+        versionName '1.0.1'
+        testInstrumentationRunner 'dev.tokenmonitor.eink.EngineeringInstrumentation'
     }
     sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/einkAssets'))
     compileOptions { sourceCompatibility JavaVersion.VERSION_11; targetCompatibility JavaVersion.VERSION_11 }
@@ -57,46 +61,64 @@ android {
 }
 tasks.named('preBuild').configure { dependsOn einkAssets }
 
-// Pure Java checks run without Android or a test dependency.
-tasks.register('checkNativePolicy', JavaExec) {
-    dependsOn 'compileDebugUnitTestJavaWithJavac', einkAssets
-    classpath = files(layout.buildDirectory.dir('intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes'),
-                      layout.buildDirectory.dir('intermediates/javac/debug/compileDebugJavaWithJavac/classes'))
-    mainClass = 'dev.tokenmonitor.eink.NativePolicyTest'
-    args layout.buildDirectory.dir('generated/einkAssets').get().asFile.absolutePath
+// Each native check owns a plain Java main; discovery prevents a newly added
+// check from compiling successfully without ever being executed by the gate.
+def nativeChecks = []
+def legacyCheckNames = [
+    NativePolicyTest: 'checkNativePolicy',
+    DisplayRefreshPolicyTest: 'checkDisplayRefresh',
+    DeviceStatusTest: 'checkDeviceStatus',
+    ConnectionTestControllerTest: 'checkConnectionTest',
+    ConnectionStoreMigrationTest: 'checkConnectionStore',
+    HubHttpClientTest: 'checkHubHttp'
+]
+fileTree('src/test/java').matching { include '**/*Test.java' }.files.sort().each { source ->
+    if (!(source.text =~ /public\s+static\s+void\s+main\s*\(/).find()) {
+        throw new GradleException('Native check must have a public static void main: ' + source)
+    }
+    def className = source.name - '.java'
+    def packageMatch = source.text =~ /(?m)^package\s+([\w.]+)\s*;/
+    if (!packageMatch.find()) throw new GradleException('Missing test package: ' + source)
+    def qualifiedName = packageMatch.group(1) + '.' + className
+    nativeChecks.add(tasks.register(legacyCheckNames.get(className, 'check' + className), JavaExec) {
+        group = 'verification'
+        description = 'Runs ' + qualifiedName + ' without a test framework.'
+        dependsOn 'compileDebugUnitTestJavaWithJavac', einkAssets
+        classpath = files(layout.buildDirectory.dir('intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes'),
+                          layout.buildDirectory.dir('intermediates/javac/debug/compileDebugJavaWithJavac/classes'),
+                          android.bootClasspath)
+        mainClass = qualifiedName
+        if (className == 'NativePolicyTest') {
+            args layout.buildDirectory.dir('generated/einkAssets').get().asFile.absolutePath
+        }
+    })
+}
+if (nativeChecks.empty) throw new GradleException('No native checks discovered')
+
+tasks.register('checkEinkUi', Exec) {
+    group = 'verification'
+    description = 'Runs every packaged UI Node test, without external dependencies.'
+    workingDir rootProject.projectDir.parentFile.parentFile
+    def testFiles = fileTree('../ui').matching { include 'test_*.mjs' }.files.sort()
+    if (testFiles.empty) throw new GradleException('No UI tests discovered')
+    commandLine(['node', '--test'] + testFiles.collect { it.absolutePath })
 }
 
-// Every APK assembly must verify the same resource boundary used by WebView.
-tasks.matching { it.name in ['assembleDebug', 'assembleRelease'] }.configureEach {
-    dependsOn 'checkNativePolicy'
+tasks.register('checkEinkReleaseTools', Exec) {
+    group = 'verification'
+    workingDir rootProject.projectDir.parentFile.parentFile
+    commandLine 'python3', '-m', 'unittest', 'discover', '-s', 'tools', '-p', 'test_*.py'
 }
 
-tasks.register('checkDisplayRefresh', JavaExec) {
-    dependsOn 'compileDebugUnitTestJavaWithJavac'
-    classpath = files(layout.buildDirectory.dir('intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes'),
-                      layout.buildDirectory.dir('intermediates/javac/debug/compileDebugJavaWithJavac/classes'))
-    mainClass = 'dev.tokenmonitor.eink.DisplayRefreshPolicyTest'
+tasks.register('checkEink') {
+    group = 'verification'
+    description = 'Runs all native, UI, and APK release gate checks.'
+    dependsOn nativeChecks, 'checkEinkUi', 'checkEinkReleaseTools'
 }
 
-tasks.register('checkDeviceStatus', JavaExec) {
-    dependsOn 'compileDebugUnitTestJavaWithJavac'
-    classpath = files(layout.buildDirectory.dir('intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes'),
-                      layout.buildDirectory.dir('intermediates/javac/debug/compileDebugJavaWithJavac/classes'))
-    mainClass = 'dev.tokenmonitor.eink.DeviceStatusTest'
-}
-
-tasks.register('checkConnectionTest', JavaExec) {
-    dependsOn 'compileDebugUnitTestJavaWithJavac'
-    classpath = files(layout.buildDirectory.dir('intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes'),
-                      layout.buildDirectory.dir('intermediates/javac/debug/compileDebugJavaWithJavac/classes'))
-    mainClass = 'dev.tokenmonitor.eink.ConnectionTestControllerTest'
-}
-
-// Synthetic migration lifecycle; Android classes are linked, never executed.
-tasks.register('checkConnectionStore', JavaExec) {
-    dependsOn 'compileDebugUnitTestJavaWithJavac'
-    classpath = files(layout.buildDirectory.dir('intermediates/javac/debugUnitTest/compileDebugUnitTestJavaWithJavac/classes'),
-                      layout.buildDirectory.dir('intermediates/javac/debug/compileDebugJavaWithJavac/classes'),
-                      android.bootClasspath)
-    mainClass = 'dev.tokenmonitor.eink.ConnectionStoreMigrationTest'
+tasks.named('check').configure { dependsOn 'checkEink' }
+// Both direct assemblies and the supported build script must pass the full gate.
+// packageRelease also covers bundleRelease and APK callers that skip assemble.
+tasks.matching { it.name in ['assembleDebug', 'assembleRelease', 'packageRelease', 'bundleRelease'] }.configureEach {
+    dependsOn 'checkEink'
 }

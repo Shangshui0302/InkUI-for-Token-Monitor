@@ -5,7 +5,7 @@ import { networkLabel } from './device-status.mjs';
 
 // Settings use the same fixed viewport as the dashboard. A page is a set of
 // complete controls; no container scrolls, including when the IME is visible.
-export function createSettings({ bridge, getConfig, getStatus, saveConnection, clearCache, refresh, repaint, onConnected = () => {} }) {
+export function createSettings({ bridge, getConfig, getStatus, saveConnection, reloadConnection, clearCache, refresh, repaint, onConnected = () => {} }) {
   const $ = id => document.getElementById(id);
   const root = $('settings'), body = root.querySelector('.settings-body');
   const pager = $('settings-pager'), fields = $('editor-fields'), actions = root.querySelector('.editor-actions');
@@ -14,6 +14,8 @@ export function createSettings({ bridge, getConfig, getStatus, saveConnection, c
   let confirmAction = null, confirmFocus = null, layingOut = false, savedMessage = '';
   let summarySignature = '', diagnosticSignature = '';
   const remember = new Map();
+  const unreadable = config => ['read_failed', 'key_unavailable'].includes(config.storageState);
+  let recoveryEditing = false;
   const flow = createSettingsConnectionFlow({ bridge, getConfig, save: saveConnection, onState(state) {
     if (state.phase === 'saved') {
       savedMessage = state.message;
@@ -71,7 +73,7 @@ export function createSettings({ bridge, getConfig, getStatus, saveConnection, c
       root.hidden = false; $('app').setAttribute('inert', ''); $('app').setAttribute('aria-hidden', 'true');
     }
     if (view === 'edit' && next !== 'edit' && dirty()) { confirmDiscard(() => navigate(next)); return; }
-    if (next === 'connection' && !getConfig().hubUrl) edit();
+    if (next === 'connection' && !getConfig().hubUrl && !unreadable(getConfig())) edit();
     else navigate(next);
     update();
   }
@@ -114,7 +116,8 @@ export function createSettings({ bridge, getConfig, getStatus, saveConnection, c
     if (initialSetup) close(); else navigate('connection');
   }
   function edit() {
-    initialSetup = !getConfig().hubUrl;
+    recoveryEditing = unreadable(getConfig());
+    initialSetup = !getConfig().hubUrl && !recoveryEditing;
     savedMessage = ''; flow.cancel(); eraseDraft();
     const config = getConfig();
     $('connection-url').value = config.hubUrl;
@@ -128,7 +131,7 @@ export function createSettings({ bridge, getConfig, getStatus, saveConnection, c
     const has = config.hasHubSecret;
     const address = normalizeConnectionAddress($('connection-url').value);
     const same = !address.error && address.origin && address.origin === normalizeConnectionAddress(savedUrl).origin;
-    const retained = has && same;
+    const retained = has && same && !recoveryEditing;
     const typed = Boolean($('connection-secret').value);
     $('secret-input-area').hidden = false;
     $('connection-secret-state').textContent = removeSecret ? '待移除' : typed ? '待保存' : retained ? '已保存' : has ? '需重新填写' : '待填写';
@@ -138,14 +141,14 @@ export function createSettings({ bridge, getConfig, getStatus, saveConnection, c
     $('secret-reveal').textContent = $('connection-secret').type === 'password' ? '显示' : '隐藏';
     $('secret-reveal').setAttribute('aria-pressed', String($('connection-secret').type !== 'password'));
     $('connection-secret').placeholder = removeSecret ? '输入新密钥可撤销移除' : retained ? '留空保留，输入新密钥替换' : '粘贴 Hub 密钥';
-    $('connection-secret-help').textContent = removeSecret ? '保存时移除已有密钥' : typed ? '连接成功后保存' : retained ? '原密钥不回显，可直接输入替换' : has ? '新地址不沿用原密钥' : '填写 Hub 提供的密钥';
+    $('connection-secret-help').textContent = recoveryEditing ? '原记录不可读，需重新填写密钥；连接测试成功后才替换' : removeSecret ? '保存时移除已有密钥' : typed ? '连接成功后保存' : retained ? '原密钥不回显，可直接输入替换' : has ? '新地址不沿用原密钥' : '填写 Hub 提供的密钥';
     $('connection-cancel').textContent = initialSetup ? '稍后设置' : '取消';
     const hint = address.loopback ? '此地址指向墨水屏设备本身。电脑上的 Hub 请填写电脑的局域网 IP。'
       : address.defaultPort ? '将连接 ' + address.value
       : '';
     $('connection-address-hint').textContent = hint; $('connection-address-hint').hidden = !hint;
     const testing = flow.state.phase === 'testing';
-    $('connection-save').textContent = testing ? '正在连接…' : initialSetup ? '连接并保存' : '测试并保存';
+    $('connection-save').textContent = testing ? '正在连接…' : recoveryEditing ? '测试并重新配置' : initialSetup ? '连接并保存' : '测试并保存';
     $('connection-save').disabled = testing;
     $('connection-offline-save').hidden = !flow.state.canSaveOffline;
     return { hint };
@@ -242,7 +245,9 @@ export function createSettings({ bridge, getConfig, getStatus, saveConnection, c
   }
   function diagnosticLayout() {
     const status = getStatus(), config = getConfig();
-    const rows = [['网络', networkLabel(status.deviceStatus)], ['Hub', status.label || '尚未连接'],
+    const rows = [['网络', networkLabel(status.deviceStatus)],
+      ['连接记录', ({ ready: '可读取', unconfigured: '首次连接尚未配置', read_failed: '读取失败，原记录已保留；可重试读取或重新配置', key_unavailable: '加密钥匙不可用，原记录已保留；可重试读取或重新配置' })[config.storageState] || '尚未配置'],
+      ['Hub', status.label || '尚未连接'],
       ['地址', config.hubUrl || '未配置'], ['最近成功', status.receivedAt ? absoluteTime(status.receivedAt) : '尚无数据'],
       ['详情', status.detail || '尚无数据'], ['历史', status.historyError || (status.historyReceivedAt ? '已读取 · ' + absoluteTime(status.historyReceivedAt) : '尚未读取')]];
     const signature = JSON.stringify(rows) + ':' + body.clientWidth + ':' + body.clientHeight;
@@ -294,12 +299,17 @@ export function createSettings({ bridge, getConfig, getStatus, saveConnection, c
     const signature = JSON.stringify([config, status, savedMessage]);
     if (signature !== summarySignature) {
       summarySignature = signature;
-      $('hub-summary-state').textContent = config.hubUrl ? status.label || '尚未连接' : '未配置';
-      $('hub-summary-address').textContent = config.hubUrl || '添加电脑上的 Hub';
+      const recovery = unreadable(config);
+      $('hub-summary-state').textContent = config.storageState === 'key_unavailable' ? '加密钥匙不可用' : recovery ? '连接记录读取失败' : config.hubUrl ? status.label || '尚未连接' : '未配置';
+      $('hub-summary-address').textContent = config.hubUrl || (recovery ? '原记录已保留' : '添加电脑上的 Hub');
       $('hub-summary-time').textContent = status.receivedAt ? '最近成功 ' + absoluteTime(status.receivedAt) : '尚未读取';
-      const error = status.state === 'error' && config.hubUrl ? status.detail : savedMessage;
+      const error = recovery ? savedMessage || (config.storageState === 'key_unavailable'
+        ? '先重试读取。若仍不可用，可输入新的连接，测试成功并确认后替换记录与加密钥匙。'
+        : '先重试读取。若仍失败，可输入新的连接，测试成功并确认后替换原记录。')
+        : status.state === 'error' && config.hubUrl ? status.detail : savedMessage;
       $('hub-summary-error').textContent = error; $('hub-summary-error').hidden = !error;
-      $('hub-edit').textContent = config.hubUrl ? '编辑地址与密钥' : '添加 Hub';
+      $('hub-edit').textContent = recovery ? '重新配置' : config.hubUrl ? '编辑地址与密钥' : '添加 Hub';
+      $('hub-reload').hidden = !recovery;
       $('hub-retry').hidden = !config.hubUrl || status.state !== 'error';
     }
     layout();
@@ -321,6 +331,14 @@ export function createSettings({ bridge, getConfig, getStatus, saveConnection, c
   });
   $('hub-summary').addEventListener('click', () => navigate('diagnostics'));
   $('hub-edit').addEventListener('click', edit);
+  $('hub-reload').addEventListener('click', () => {
+    flow.cancel();
+    try {
+      reloadConnection?.();
+      savedMessage = unreadable(getConfig()) ? '仍无法读取，原记录已保留。可再次重试或重新配置。' : '连接记录已重新读取';
+    } catch (_) { savedMessage = '仍无法读取，原记录已保留。请重试读取。'; }
+    update(); repaint('content');
+  });
   $('hub-retry').addEventListener('click', () => { savedMessage = ''; refresh(); });
   $('diagnostic-retry').addEventListener('click', () => { savedMessage = ''; refresh(); });
   $('about-open').addEventListener('click', () => navigate('about'));
@@ -351,7 +369,13 @@ export function createSettings({ bridge, getConfig, getStatus, saveConnection, c
   });
   $('connection-save').addEventListener('click', () => {
     if (document.activeElement?.matches('#settings input')) document.activeElement.blur();
-    flow.submit({ source: 'hub', url: $('connection-url').value, secret: $('connection-secret').value, removeSecret });
+    const submit = () => flow.submit({ source: 'hub', url: $('connection-url').value, secret: $('connection-secret').value, removeSecret, recover: recoveryEditing });
+    if (recoveryEditing) {
+      // Exactly one confirmation per replacement attempt; cancellation keeps the draft.
+      confirm('重新配置连接？', getConfig().storageState === 'key_unavailable'
+        ? '测试成功后替换原记录及加密钥匙；失败保留原记录。'
+        : '测试成功后替换无法读取的原记录；失败保留原记录。', submit, '测试并替换', '继续编辑');
+    } else submit();
   });
   $('connection-offline-save').addEventListener('click', () => flow.saveOffline());
   function capabilities() {

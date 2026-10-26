@@ -3,7 +3,9 @@ export function publicConnection(value = {}) {
   return Object.freeze({
     hubUrl: typeof value.hubUrl === 'string' ? value.hubUrl : '',
     hasHubSecret: value.hasHubSecret === true,
-    revision: typeof value.revision === 'string' ? value.revision : ''
+    revision: typeof value.revision === 'string' ? value.revision : '',
+    storageState: ['unconfigured', 'ready', 'read_failed', 'key_unavailable'].includes(value.storageState)
+      ? value.storageState : typeof value.hubUrl === 'string' && value.hubUrl ? 'ready' : 'unconfigured'
   });
 }
 export function connectionPayload(hubUrl, hubInput, clearHub) {
@@ -13,7 +15,7 @@ export function connectionPayload(hubUrl, hubInput, clearHub) {
   };
 }
 export function sourceKey(connection) {
-  return JSON.stringify([connection.hubUrl, connection.revision]);
+  return JSON.stringify([connection.hubUrl, connection.revision, connection.storageState]);
 }
 export function createSourceFence(initial = '') {
   let key = initial, epoch = 0;
@@ -59,6 +61,9 @@ export function connectionTestMessage(result) {
   if (result.ok) return 'Hub 连接测试成功。' + (Number.isFinite(result.latencyMs) ? '用时 ' + Math.max(0, Math.round(result.latencyMs)) + ' 毫秒。' : '');
   return ({
     invalid_connection: '地址或密钥格式无效，请检查当前输入后重试。',
+    connection_recovery_required: '请先重试读取，或明确选择重新配置。',
+    connection_read_failed: '连接记录暂时无法读取，请重试读取。',
+    connection_key_unavailable: '原连接的加密钥匙不可用，请重试读取或重新配置。',
     unconfigured: '请先填写 Hub 地址。',
     unauthorized: '认证失败，请填写有效密钥；更换来源地址后需重新输入密钥。',
     timeout: '测试超时，请检查电脑是否在线、端口和防火墙是否允许局域网访问。',

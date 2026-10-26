@@ -137,3 +137,33 @@ test('missing native test capability cannot save and synchronous bridge failure 
   assert.equal(broken.submit(draft()), true); assert.equal(broken.state.error, 'network_error');
   assert.equal(writes, 0); assert.equal(broken.saveOffline(), true); assert.equal(writes, 1);
 });
+
+test('unreadable record requires confirmation and a new secret before testing', () => {
+  for (const storageState of ['read_failed', 'key_unavailable']) {
+    const h = harness(); h.setConfig(publicConnection({ storageState }));
+    assert.equal(h.flow.submit(draft({ secret: 'new-secret' })), false);
+    assert.equal(h.requests.length, 0);
+    assert.equal(h.flow.submit(draft({ recover: true })), false);
+    assert.equal(h.flow.submit(draft({ recover: true, secret: 'new-secret', removeSecret: true })), false);
+    assert.equal(h.requests.length, 0); assert.equal(h.saves.length, 0);
+    assert.equal(h.flow.submit(draft({ recover: true, secret: 'new-secret' })), true);
+    assert.equal(h.requests[0].payload.recover, true);
+    h.reply(); assert.equal(h.saves.length, 1); assert.equal(h.saves[0].recover, true);
+    assert.equal(h.flow.state.verified, true);
+    assert.equal(JSON.stringify(h.states).includes('new-secret'), false);
+  }
+});
+test('recovery cannot replace unreadable records after an offline failure or a storage state change', () => {
+  for (const storageState of ['read_failed', 'key_unavailable']) {
+    for (const error of ['network_error', 'timeout', 'connection_refused', 'host_not_found']) {
+      const h = harness(); h.setConfig(publicConnection({ storageState }));
+      h.flow.submit(draft({ recover: true, secret: 'new-secret' })); h.reply({ ok: false, error });
+      assert.equal(h.flow.state.canSaveOffline, false); assert.equal(h.flow.saveOffline(), false);
+      assert.equal(h.saves.length, 0);
+    }
+    const h = harness(); h.setConfig(publicConnection({ storageState }));
+    h.flow.submit(draft({ recover: true, secret: 'new-secret' }));
+    h.setConfig(publicConnection({ storageState: 'ready' })); h.reply();
+    assert.equal(h.saves.length, 0); assert.equal(h.flow.state.error, 'connection_changed');
+  }
+});

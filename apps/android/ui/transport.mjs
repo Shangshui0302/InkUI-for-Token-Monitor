@@ -18,17 +18,35 @@ export function saveNativeConnection(bridge, payload) {
   if (!result.ok) throw new Error(result.error === 'invalid_connection' ? '地址或密钥格式不正确，请检查后重试。' : '连接配置未保存，请重试。');
   return result.connection ? publicConnection(result.connection) : nativeConnection(bridge);
 }
-export function createTransport({ fetcher = (...args) => fetch(...args) } = {}) {
+export function reloadNativeConnection(bridge) {
+  const result = JSON.parse(bridge.reloadConnection());
+  if (!result || !result.connection) throw new Error('连接记录未能重新读取，请重试。');
+  return publicConnection(result.connection);
+}
+let requestSequence = 0;
+const requestSession = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+export function createTransport({ fetcher = (...args) => fetch(...args), bridge,
+  origin = globalThis.location?.origin, timeoutMs = 10000, setTimer = setTimeout, clearTimer = clearTimeout } = {}) {
   const active = new Set();
+  const native = bridge && origin === 'https://appassets.androidplatform.net';
   return {
     cancel() { for (const controller of active) controller.abort(); active.clear(); },
     async getJSON(path) {
       if (!['/api/stats', '/api/history'].includes(path)) throw new Error('不支持的 Hub 接口。');
       const controller = new AbortController(); active.add(controller);
-      const timeout = setTimeout(() => controller.abort(), 10000);
+      const id = native ? 'read-' + requestSession + '-' + (++requestSequence).toString(36) : null;
+      const cancelNative = () => {
+        if (id) { try { bridge.cancelDataRequest?.(id); } catch (_) { /* Abort remains valid on older APKs. */ } }
+      };
+      // Signal cancellation and native socket cancellation happen in the same turn.
+      controller.signal.addEventListener('abort', cancelNative, { once: true });
+      const timeout = setTimer(() => controller.abort(), timeoutMs);
       try {
-        // Android supplies credentials to the configured source; the UI never reads them.
-        const response = await fetcher(path, { signal: controller.signal, cache: 'no-store', credentials: 'omit' });
+        // Only the packaged origin receives public native request identity.
+        const options = { signal: controller.signal, cache: 'no-store', credentials: 'omit' };
+        if (id) options.headers = { 'X-InkUI-Request-Id': id };
+        const response = await fetcher(path, options);
+        if (controller.signal.aborted) throw new DOMException('Request aborted', 'AbortError');
         if (!response.ok) {
           let body = {};
           try { body = await response.json(); } catch (_) { /* Keep fallback. */ }
@@ -37,8 +55,10 @@ export function createTransport({ fetcher = (...args) => fetch(...args) } = {}) 
           error.status = response.status; error.code = body.error;
           error.kind = known?.[0] || (response.status === 401 ? '认证失败' : response.status >= 500 ? '上游或服务错误' : '读取失败'); throw error;
         }
-        return await response.json();
-      } finally { clearTimeout(timeout); active.delete(controller); }
+        const body = await response.json();
+        if (controller.signal.aborted) throw new DOMException('Request aborted', 'AbortError');
+        return body;
+      } finally { clearTimer(timeout); controller.signal.removeEventListener('abort', cancelNative); active.delete(controller); }
     }
   };
 }

@@ -2,7 +2,7 @@
 
 InkUI 是独立开发的非官方 Token Monitor 客户端，Android APK 是本仓库唯一产品。包内界面随 APK 发布，原生层读取外部 Hub；账号管理、采集和跨设备汇总由 [Token Monitor](https://github.com/Javis603/token-monitor) 提供。本仓库不开发或维护 Hub，也不直接查询各服务商 API。
 
-最低 Android 10（API 29），当前主要适配 BOOX Poke3。系统 WebView 需支持 JavaScript 模块及页面使用的浏览器 API。安装入口见 [README](../README.md#安装与连接)。
+最低 Android 10（API 29），当前主要适配 BOOX Poke3。系统 WebView 需支持 JavaScript 模块及页面使用的浏览器 API（包括 `Object.hasOwn`）；过旧或启动失败时显示原生重试提示。安装入口见 [README](../README.md#安装与连接)。
 
 ## 连接与数据范围
 
@@ -103,7 +103,7 @@ Hub 原密钥同时可授权写接口；APK 只转发上述两个固定 GET，�
 
 包内页面使用固定虚拟 HTTPS 来源，阻止外部页面、文件访问、弹窗和导航。凭据以 Android Keystore 的 AES-GCM 密钥加密，经 AtomicFile 写入 `noBackupFilesDir`，关闭备份；页面只能读取地址、配置版本和密钥是否已保存，不内置个人连接配置。
 
-网络不跟随重定向、不使用系统代理；连接与读取各有 8 秒超时，响应上限 8 MiB。未保存连接测试使用相同校验，10 秒总截止，异步运行且仅有一个有效测试；退后台取消，结果不返回响应正文或密钥。
+网络不跟随重定向、不使用系统代理；正式读取与未保存连接测试共用固定 GET 核心，每次请求有 10 秒总截止，连接／单次读取最长 8 秒，响应上限 8 MiB。正式读取最多占用两个连接槽，连接测试一个；取消和截止立即结束等待，断开套接字在后台处理，避免阻塞界面。永久阻塞的底层调用会保留其槽位，后续请求不会无限扩张线程或连接。退后台、切换配置和界面重建使旧结果失效；测试结果不返回响应正文或密钥。页面的请求编号只用于原生取消，不转发给 Hub。
 
 统计与历史分别缓存最近成功的展示字段，断线明确标记缓存。额度详情可包含账号姓名／邮箱和账务展示信息；私有 ID、密钥、Cookie、请求头及任意原始响应不进入页面缓存。切换来源清除展示缓存并丢弃旧请求，保留外观和刷新偏好；清缓存需再次确认，不清除连接配置。
 
@@ -117,6 +117,14 @@ Hub 原密钥同时可授权写接口；APK 只转发上述两个固定 GET，�
 
 核对 [上游 Hub 源码](https://github.com/Javis603/token-monitor/blob/7f14812656344cd915a57bdeb25ea746ae439e99/src/hub/server.js) 后，当前没有 mDNS／DNS-SD 自动发现或固定 Hub 实例身份；构建标记也不能代表同一台电脑。客户端不扫描子网，也不把已保存密钥发送到猜测的地址。IP 改变而主机名不可用时，需要编辑地址并验证；改变来源地址仍须重新填写密钥。
 
+## 界面与配置异常恢复
+
+阅读位置按 Hub 地址保存，包括主页面、时间范围、子视图、服务商筛选和当前分页；不保存表单草稿或密钥。服务商只保留稳定身份的非明文指纹，账号身份不明确时回到全部服务商，页数变化时自动限制到有效范围。
+
+WebView 渲染进程退出后移除旧实例并重新创建；60 秒内最多自动恢复一次，连续失败显示原生“重试”按钮。主页面载入失败、初始化超时或浏览器能力不足也显示原生提示，避免空白页面和无限重启。重建后恢复阅读位置，连接配置保留。
+
+无法读取连接记录与首次安装分开显示。先点击“重试读取”；确认需要重配时点击“重新配置”，填写地址和新密钥，连接测试成功后才替换。恢复过程不能跳过测试或离线保存；原生层要求 30 秒内、匹配当前输入的一次性成功测试。普通读取不生成新钥匙，不删除原记录；仅明确缺失或永久失效的加密钥匙才使用新 alias，写入失败保留旧记录。
+
 ## 构建与签名升级
 
 需要已有 JDK 17+、Android SDK platform 36 及匹配 build-tools。Gradle wrapper 为 8.14.3，Android Gradle Plugin 为 8.11.0；首次解析依赖需要网络或已有缓存。在仓库根目录执行：
@@ -127,7 +135,7 @@ export ANDROID_HOME=/path/to/android-sdk
 tools/build-eink-apk.sh debug
 ```
 
-Debug 输出 `output/android/inkui-debug.apk` 及 `.sha256` 文件，包名 `dev.tokenmonitor.eink.debug`，开启应用与 WebView 调试。模型及原生策略检查入口见 [README](../README.md#开发)。
+Debug 输出 `output/android/inkui-<version>-code<code>-debug.apk` 及 `.sha256` 文件，包名 `dev.tokenmonitor.eink.debug`，开启应用与 WebView 调试。模型及原生策略检查入口见 [README](../README.md#开发)。
 
 Release 使用长期保存的私有签名配置，字段见 [keystore.properties.example](../apps/android/keystore.properties.example)。密钥及密码放在仓库外：
 
@@ -136,7 +144,18 @@ export TOKEN_MONITOR_SIGNING_FILE=/private/path/release.properties
 tools/build-eink-apk.sh release
 ```
 
-输出 `output/android/inkui-release.apk` 及 `.sha256` 文件，包名 `dev.tokenmonitor.eink`，关闭应用及 WebView 调试。缺少签名配置时构建失败。覆盖升级必须保持相同包名与签名，并使用不低于已安装包的 `versionCode`；交付新的开发构建时递增内部构建号；请长期保留发布密钥。
+输出 `output/android/inkui-<version>-code<code>-release.apk` 及 `.sha256` 文件，包名 `dev.tokenmonitor.eink`，关闭应用及 WebView 调试。缺少签名配置时构建失败。覆盖升级必须保持相同包名与签名，并使用不低于已安装包的 `versionCode`；交付新的开发构建时递增内部构建号；请长期保留发布密钥。
+
+构建入口自动执行 `checkEink`，包含全部 Node 界面测试、原生策略检查和发布工具负例；直接调用 debug／release 组装也接入相同门禁。Wrapper ZIP 有固定 SHA-256。`tools/verify-eink-release.sh` 校验 APK 内版本、包名、调试属性、SDK、全部包内界面资源与 v2 签名。开发包允许 `-dev`；正式包必须提供同名 tag、比前次更大的构建号及长期证书指纹，例如：
+
+```bash
+export TOKEN_MONITOR_RELEASE_TAG=v1.0.1
+export TOKEN_MONITOR_PREVIOUS_VERSION_CODE=13
+export TOKEN_MONITOR_CERT_SHA256='public-certificate-fingerprint'
+tools/build-eink-apk.sh release
+```
+
+示例发布前须将源码版本切成对应正式版本、递增构建号；本地构建入口不会自动改版本或上传。GitHub Actions 运行统一检查、lint、APK 构建，并在 API 29／36 模拟器执行 `EngineeringInstrumentation`。标签 `vX.Y.Z` 的所有检查通过后，发布任务使用长期签名构建正式 APK，校验证书、版本与源码资源，再上传 APK 和 `SHA256SUMS` 并公开 Release。仓库需配置四项 Actions 加密机密：`INKUI_KEYSTORE_BASE64`、`INKUI_STORE_PASSWORD`、`INKUI_KEY_ALIAS`、`INKUI_KEY_PASSWORD`；签名只在标签发布任务的临时目录中还原并在结束时删除，不随源码、缓存或安装包分发。API 29 的临时 CI 模拟器安装固定官方 AOSP WebView 128 并校验 SHA-256，以覆盖页面使用的浏览器 API；该步骤拒绝实体设备，不能用于更改 Poke3 系统组件。手动框架检查使用 `:app:connectedDebugAndroidTest`，只操作独立 `.debug` 包及合成测试记录，已有调试连接会使测试拒绝运行。
 
 首个公开版本统一为 **v1.0.0**，`versionCode` 为 12。发布资产命名为 `InkUI-for-Token-Monitor-v1.0.0.apk` 和 `SHA256SUMS`；安装下载与校验值以 [发布页](https://github.com/Shangshui0302/InkUI-for-Token-Monitor/releases/latest) 为准。
 
@@ -152,15 +171,25 @@ tools/build-eink-apk.sh release
 
 - `versionName` 面向用户，遵守上述规则；开发期间用目标版本加 `-dev`，不因每次界面微调增加公开版本号。
 - `versionCode` 是独立的 Android 内部构建号，新交付构建递增；重新规划公开版本时也不回退，保证已有安装可覆盖升级。
-- 当前正式包为 **1.0.0，构建 12**，文件名为 `InkUI-for-Token-Monitor-v1.0.0.apk`；“更多”和“关于”同时显示版本与构建号。Git 标签、Release 标题、安装包名称和 APK 内版本保持一致。
+- 本次发布源码为 **1.0.1，构建 14**，对应标签 `v1.0.1` 与 `inkui-1.0.1-code14-release.apk`；“更多”和“关于”同时显示版本与构建号。正式安装包以 GitHub Release 为准，Git 标签、Release 标题与 APK 内版本保持一致。
 
 ## 当前验证范围
+
+正式源码 **1.0.1，构建 14** 将已验收开发构建 13 的实现整理为稳定版；当前构建与平台测试结果由对应 GitHub Actions 记录，发布任务在全部检查通过后才公开安装包。以下保留开发构建的具体设备验证证据。
+
+2026-10-26 开发构建 **1.0.1-dev，构建 13** 已通过标准 `check`、debug／release lint、133 项界面测试、9 个原生检查入口及 13 项发布工具正反例。Debug 与长期签名 Release 均构建成功，25 个包内资源与源码一致，APK v2 签名、实际版本和构建号校验通过。
+
+同一 Debug APK 已在 **Poke3（API 29／WebView 108）** 和隔离的 **Android 16（API 36）模拟器** 各通过 7 项真实框架检查，设备提取 APK 的 SHA-256 与本地交付包一致：真实 Keystore 加密／冷读与缺失钥匙恢复、Activity 重建与本地偏好、全屏与键盘显隐、渲染进程终止后的自动恢复／连续失败／手动重试、真实网络回调注册与停止、回环 Hub 固定 GET／原生取消及可见阅读位置恢复、原生成功测试收据限制重配。请求取消在设备上 1 秒内完成且不发布迟到响应。
+
+框架测试使用独立 `.debug` 包，配置与密钥为合成数据，Hub 只监听设备回环地址；保留 Poke3 正式版 1.0.0 的安装和配置。本轮未覆盖升级正式包或发布新版。Android 16 是模拟器证据；未制造真实实体钥匙永久失效，未做断电、长期残影、耗电或其他实体机型测试。
+
+以下为公开首版及更早构建的历史验证记录，不能代替上面的当前构建结果。
 
 公开首版重新编号为 **1.0.0，构建 12**，已在 Poke3 覆盖安装并确认版本显示、Hub 连接和配置保留。23 个界面资源与下述已验收构建 11 逐字节一致，签名验证通过；版本纠正不回退内部构建号。
 
 2026-10-26 曾在 Poke3 从内部构建 10 覆盖升级到开发构建 11，设备内 APK 与交付包 SHA-256 一致，原有连接与显示偏好保留。实测短时关闭 Wi-Fi 后保留配置与数据，恢复 Wi-Fi 后无需点击刷新即可重新连接 Hub；完成 24 次主页面切换和退出前台／返回检查，设备停留在额度页。当前系统日志未见本轮应用异常。密钥栏可见且不回显原密钥的构建 10 结果保留；首次安装和完整密钥替换流程的新版真机验收仍待完成。
 
-当前开发源码通过 116 项 JavaScript 测试、原生接口白名单与连接测试、合成存储迁移检查。浏览器使用合成 Hub 数据完成 28 项已有流程及 17 项首次连接／密钥交互检查；七组视口（662×490、240×320、320×240、192×180、662×270、320×180、1072×1448）的 49 个设置视图、90 个分页画面无控件越界或分区裁切。检查包含首次打开直接填写、验证成功直达额度、失败保留输入、密钥替换栏常显、步骤切换、跳过配置、离线保存和清缓存保留偏好。23 个包内资源与源码一致，APK v2 签名验证通过。
+公开首版对应源码通过 116 项 JavaScript 测试、原生接口白名单与连接测试、合成存储迁移检查。浏览器使用合成 Hub 数据完成 28 项已有流程及 17 项首次连接／密钥交互检查；七组视口（662×490、240×320、320×240、192×180、662×270、320×180、1072×1448）的 49 个设置视图、90 个分页画面无控件越界或分区裁切。检查包含首次打开直接填写、验证成功直达额度、失败保留输入、密钥替换栏常显、步骤切换、跳过配置、离线保存和清缓存保留偏好。23 个包内资源与源码一致，APK v2 签名验证通过。
 
 升级配置只保留 Hub 地址、密钥与 revision，重写移除其他旧字段；写入失败时保留已读 Hub 与旧文件，下次保存或启动重试。旧缓存只做删除，不再读取；配色、更新频率和服务商顺序保留。合成迁移测试不代替 Android Keystore、真实密文与断电恢复验证。
 

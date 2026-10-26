@@ -64,7 +64,7 @@ Hub 原密钥也可授权写接口，InkUI 只发送固定 GET 请求；HTTP 连
 
 ## 版本规则
 
-首个公开版本为 **1.0.0**。后续按 `主版本.次版本.修订版本` 递增：不兼容变更增加主版本，兼容新增功能增加次版本，修复与局部优化增加修订版本；增加高位时低位归零。开发包使用目标版本加 `-dev`，Android 内部构建号独立递增。详见 [版本号](docs/token-monitor-android.md#版本号)。
+首个公开版本为 **1.0.0**。后续按 `主版本.次版本.修订版本` 递增：不兼容变更增加主版本，兼容新增功能增加次版本，修复与局部优化增加修订版本；增加高位时低位归零。开发包使用目标版本加 `-dev`，Android 内部构建号独立递增。本次发布源码为 **1.0.1（构建 14）**；标签触发 CI，全部检查通过后签名并发布安装包和校验文件。详见 [版本号](docs/token-monitor-android.md#版本号)。
 
 ## 开发
 
@@ -76,21 +76,24 @@ export ANDROID_HOME=/path/to/android-sdk
 tools/build-eink-apk.sh debug
 ```
 
-输出 `output/android/inkui-debug.apk`。Release 的私有签名配置与构建方式见 [构建与签名升级](docs/token-monitor-android.md#构建与签名升级)。
+输出 `output/android/inkui-<version>-code<code>-debug.apk` 及校验文件。Release 的私有签名配置与构建方式见 [构建与签名升级](docs/token-monitor-android.md#构建与签名升级)。
 
 ```bash
-node --test apps/android/ui/test_*.mjs
-node --check apps/android/ui/app.js
-apps/android/gradlew -p apps/android :app:checkNativePolicy :app:checkConnectionTest :app:checkConnectionStore :app:checkDisplayRefresh :app:checkDeviceStatus
+apps/android/gradlew -p apps/android :app:checkEink :app:lintDebug
+# 连接独立调试设备／模拟器，运行真实 Android 框架检查
+apps/android/gradlew -p apps/android :app:connectedDebugAndroidTest
 ```
 
 | 路径 | 内容 |
 | --- | --- |
 | `apps/android/` | Android 工程与原生连接、设备和刷新适配 |
 | `apps/android/ui/` | 包内界面、数据模型、合成夹具与测试 |
-| `tools/build-eink-apk.sh` | APK 构建入口 |
+| `tools/build-eink-apk.sh` | 包含完整检查的 APK 构建入口 |
+| `tools/verify-eink-release.sh` | APK 版本、签名、资源和发布一致性检查 |
 | `docs/` | Android 使用与开发指南、演示截图 |
 | `assets/cats/` | 保留供以后复用的猫猫设计资产 |
+
+`checkEink` 自动发现全部原生策略检查和界面测试；构建会执行同一门禁。CI 另在 Android API 29／36 运行框架测试。发布校验读取 APK 内实际版本和资源，不只依赖文件名；正式发布要求匹配标签、前次内部构建号与长期签名指纹。
 
 验证范围及真机边界见 [当前验证范围](docs/token-monitor-android.md#当前验证范围)。构建成功、浏览器模拟与真机测试分别记录。
 

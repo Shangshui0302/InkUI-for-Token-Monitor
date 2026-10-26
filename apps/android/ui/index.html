@@ -54,7 +54,7 @@
           </button>
           <p id="hub-summary-error" class="setting-feedback" hidden></p>
         </div>
-        <div class="hub-actions" data-settings-block><button id="hub-edit" class="primary-action" type="button">编辑连接</button><button id="hub-retry" type="button" hidden>重试</button></div>
+        <div class="hub-actions" data-settings-block><button id="hub-edit" class="primary-action" type="button">编辑连接</button><button id="hub-reload" type="button" hidden>重试读取</button><button id="hub-retry" type="button" hidden>重试</button></div>
       </section>
       <section data-setting-pane="display" class="display-grid" hidden>
         <div data-settings-block data-display-group="appearance" class="display-group">
@@ -98,6 +98,7 @@
     <footer id="settings-pager" class="setting-pager" aria-label="设置翻页" hidden><button id="settings-prev" type="button" data-icon="arrow-left" aria-label="上页"></button><output id="settings-position" aria-live="polite">1 / 1</output><button id="settings-next" type="button" data-icon="arrow-right" aria-label="下页"></button></footer>
     <div id="settings-confirm" role="alertdialog" aria-modal="true" aria-labelledby="confirm-title" aria-describedby="confirm-message" hidden><div class="confirm-card"><strong id="confirm-title">确认操作</strong><p id="confirm-message"></p><div class="confirm-actions"><button id="confirm-keep" type="button">取消</button><button id="confirm-accept" class="primary-action" type="button">确认</button></div></div></div>
   </section>
+  <script src="/boot.js" defer></script>
   <script type="module" src="/app.js"></script>
 </body>
 </html>

@@ -25,29 +25,46 @@ public final class ConnectionStoreMigrationTest {
         checkHub(unavailable.record);
         check(unavailable.writes == 2 && !unavailable.needsRewrite, "next launch retries migration");
 
-        MemoryStorage unreadable = new MemoryStorage(hub, true);
+        MemoryStorage unreadable = new MemoryStorage(hub, false);
         unreadable.failRead = true;
         ConnectionStore blocked = new ConnectionStore(unreadable);
+        check(blocked.storageState().equals("read_failed"), "read error is distinct from first setup");
         check(blocked.snapshot().hubUrl.isEmpty() && blocked.snapshot().hubSecret.isEmpty(), "no partial credentials after read failure");
         check(unreadable.writes == 0, "failed read must not overwrite disk record");
         checkHub(unreadable.record);
         unreadable.failRead = false;
-        checkHub(new ConnectionStore(unreadable).snapshot());
+        blocked.load();
+        checkHub(blocked.snapshot());
+        check(blocked.storageState().equals("ready"), "retry reload restores original record");
+        check(unreadable.writes == 0, "retry only reads original record");
 
         MemoryStorage empty = new MemoryStorage(null, false);
         check(new ConnectionStore(empty).snapshot().hubUrl.isEmpty(), "fresh install stays unconfigured");
         check(empty.writes == 0, "fresh install does not create an empty record");
+        ConnectionStore fresh = new ConnectionStore(empty);
+        check(fresh.storageState().equals("unconfigured"), "first setup has explicit state");
+        MemoryStorage keyMissing = new MemoryStorage(hub, false);
+        keyMissing.failKey = true;
+        ConnectionStore missing = new ConnectionStore(keyMissing);
+        check(missing.storageState().equals("key_unavailable"), "permanent missing key has explicit state");
+        missing.load();
+        check(keyMissing.writes == 0 && keyMissing.record == hub, "retry never writes or replaces a missing key");
+        keyMissing.failKey = false;
+        missing.load();
+        checkHub(missing.snapshot());
+        check(missing.storageState().equals("ready"), "restored key can recover original record");
         System.out.println("Connection store migration checks passed (synthetic storage; no Keystore or disk proof)");
     }
 
     private static final class MemoryStorage implements ConnectionStore.Storage {
         ConnectionStore.Config record;
-        boolean needsRewrite, failWrite, failRead;
+        boolean needsRewrite, failWrite, failRead, failKey;
         int writes;
         MemoryStorage(ConnectionStore.Config record, boolean needsRewrite) {
             this.record = record; this.needsRewrite = needsRewrite;
         }
         @Override public ConnectionStore.StoredRecord read() throws Exception {
+            if (failKey) throw new ConnectionStore.KeyUnavailableException();
             if (failRead) throw new IOException("synthetic read failure");
             return record == null ? null : new ConnectionStore.StoredRecord(record, needsRewrite);
         }

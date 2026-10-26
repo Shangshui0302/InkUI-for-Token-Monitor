@@ -110,8 +110,11 @@ final class DeviceStatusController {
             };
             try {
                 // No INTERNET/VALIDATED requirement: a LAN-only Wi-Fi connection is still a device link.
-                NetworkRequest request = new NetworkRequest.Builder().clearCapabilities()
-                        .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED).build();
+                NetworkRequest.Builder builder = new NetworkRequest.Builder();
+                if (android.os.Build.VERSION.SDK_INT >= 30) builder.clearCapabilities();
+                else builder.removeCapability(NetworkCapabilities.NET_CAPABILITY_TRUSTED)
+                        .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN);
+                NetworkRequest request = builder.addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_RESTRICTED).build();
                 connectivity.registerNetworkCallback(request, callback, handler);
                 networkCallback = callback;
             } catch (RuntimeException ignored) { networkCallback = null; }
