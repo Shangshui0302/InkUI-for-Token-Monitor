@@ -118,9 +118,27 @@ public final class ConnectionTestControllerTest {
             test.start("new", "hub", "http://replacement", "");
             ConnectionTestController.Result old = test.result();
             equal("old", old.id); equal("cancelled", old.error);
-            blocked.release.countDown();
+            // Keep the old physical read blocked until both logical results arrive.
+            // Cancelling a probe must not create capacity for another socket.
             ConnectionTestController.Result latest = test.result();
-            equal("new", latest.id); check(latest.ok, "new request succeeds");
+            equal("new", latest.id); equal("network_error", latest.error);
+            equal("http://candidate/api/stats", test.opened.take());
+            check(test.opened.isEmpty(), "busy replacement must not open another connection");
+            blocked.release.countDown();
+            // Cleanup is asynchronous. Fresh attempts provide a scheduling opportunity while
+            // the deadline bounds recovery, without assuming a particular worker ordering.
+            long recoveryDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+            int attempt = 0;
+            do {
+                check(System.nanoTime() < recoveryDeadline, "physical probe slot recovers after old read exits");
+                String retryId = "replacement-" + (++attempt);
+                test.start(retryId, "hub", "http://replacement", "");
+                latest = test.result();
+                equal(retryId, latest.id);
+                if (!latest.ok) equal("network_error", latest.error);
+            } while (!latest.ok);
+            equal("http://replacement/api/stats", test.opened.take());
+            check(test.opened.isEmpty(), "only recovered replacement opens a connection");
             check(test.results.poll(100, TimeUnit.MILLISECONDS) == null, "old result cannot finish twice");
         }
         try (Harness test = new Harness(1000)) {
