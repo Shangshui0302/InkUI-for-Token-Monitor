@@ -9,6 +9,7 @@ import { createDisplayRefresh } from './display.mjs';
 import { icon } from './icons.mjs';
 import { normalizeDeviceStatus, networkLabel } from './device-status.mjs';
 import { createConnectionRecovery, networkRecovered } from './connection-recovery.mjs';
+import { createHistoryRecovery, historyRevisionMatches } from './history-recovery.mjs';
 
 const $ = id => document.getElementById(id);
 const cacheKey = 'token-monitor-eink-snapshot-v1';
@@ -119,6 +120,7 @@ let historyForceQueued = false;
 let refreshQueued = false;
 const transport = createTransport({ bridge: nativeBridge });
 const recovery = createConnectionRecovery();
+const historyRecovery = createHistoryRecovery();
 
 function setText(node, text) {
   if (node.textContent !== text) {
@@ -174,6 +176,7 @@ onNetworkChange = (previous, next) => {
     historyCached = true; render();
     if (recovery.automaticAllowed) notice('连接失败', '设备未联网，已保留 Hub 配置；网络恢复后会重新连接。');
   } else if (!isHidden() && recovery.automaticAllowed) {
+    historyRecovery.networkChanged();
     recoveryTimer = setTimeout(() => { recoveryTimer = null; refresh(); }, 1000);
   }
 };
@@ -216,9 +219,12 @@ async function readHistory(stats, epoch) {
     if (!sourceFence.accepts(epoch)) return;
     history = nextHistory; historyReceivedAt = new Date().toISOString(); historyRevision = stats.historyRevision;
     historyError = ''; historyCached = false;
+    historyRecovery.reset();
     save(historyCacheKey, { history, receivedAt: historyReceivedAt, revision: historyRevision });
   } catch (error) {
     if (!sourceFence.accepts(epoch)) return;
+    if (error instanceof SyntaxError || /数据格式不正确/.test(error.message)) error.code = 'invalid_response';
+    historyRecovery.failed(error);
     historyError = requestFailure(error).detail; historyCached = true;
     if (error.status === 401 || error.code === 'hub_unauthorized') handleHubFailure(error);
   }
@@ -231,6 +237,7 @@ async function refresh(forceHistory = false) {
     notice('连接失败', '设备未联网，已保留 Hub 配置；网络恢复后会重新连接。'); return;
   }
   if (inFlight) { refreshQueued = true; historyForceQueued = historyForceQueued || forceHistory; return; }
+  if (forceHistory) historyRecovery.reset();
   clearTimeout(timer); inFlight = true; $('refresh').disabled = true;
   const epoch = sourceFence.capture();
   try {
@@ -238,11 +245,15 @@ async function refresh(forceHistory = false) {
     if (!sourceFence.accepts(epoch)) return;
     snapshot = stats; receivedAt = new Date().toISOString();
     recovery.reset();
+    const historyCurrent = historyRevisionMatches(history, historyRevision, stats.historyRevision);
+    // A fresh stats revision can verify retained history without downloading it
+    // again. Keep its original read time; endpoint failures remain actionable.
+    historyCached = !historyCurrent || Boolean(historyError);
     save(cacheKey, { stats, receivedAt });
     render(); notice('已连接', '用量已更新；额度为各账号采集快照。');
     // Older Hubs without revisions cannot establish cached history freshness.
     // History failures retain current stats and mark historical data as cached.
-    if (forceHistory || !history || !stats.historyRevision || historyRevision !== stats.historyRevision || historyError)
+    if (historyRecovery.ready() && (forceHistory || !historyCurrent || historyError))
       await readHistory(stats, epoch);
     if (!sourceFence.accepts(epoch)) return;
     notice('已连接', historyError ? '用量已更新；历史读取失败，保留可用缓存或预览。' : '用量已更新；额度与近期会话为最新观测。');
@@ -265,6 +276,7 @@ $('interval').addEventListener('change', () => { try { localStorage.setItem(inte
 function resetSourceCaches() {
   [cacheKey, historyCacheKey].forEach(key => { try { localStorage.removeItem(key); } catch (_) { /* Optional storage. */ } });
   snapshot = null; receivedAt = null; history = null; historyReceivedAt = null; historyRevision = null; historyError = ''; historyCached = true;
+  historyRecovery.reset();
   dashboard.clear(); render();
 }
 function applyConnection(next, message) {
@@ -299,6 +311,7 @@ settingsUI = createSettings({
     sourceFence.invalidate(); transport.cancel(); let removed = true;
     [cacheKey, historyCacheKey].forEach(key => { try { localStorage.removeItem(key); } catch (_) { removed = false; } });
     snapshot = null; receivedAt = null; history = null; historyReceivedAt = null; historyRevision = null; historyError = ''; historyCached = true;
+    historyRecovery.reset();
     dashboard.clear();
     notice('当前快照已清除', removed ? '缓存已清除；刷新后重新读取。' : '界面已清空，部分缓存未清除。');
     return removed;

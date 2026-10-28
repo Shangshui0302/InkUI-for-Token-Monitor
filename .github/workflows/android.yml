@@ -110,7 +110,7 @@ jobs:
       contents: write
     env:
       TOKEN_MONITOR_RELEASE_TAG: ${{ github.ref_name }}
-      TOKEN_MONITOR_PREVIOUS_VERSION_CODE: '13'
+      TOKEN_MONITOR_PREVIOUS_VERSION_CODE: '15'
       TOKEN_MONITOR_CERT_SHA256: 0ce7fbe63f0cc2db9ef02dbad4fa760f5f74739f9bd22681bb0160199fbe7dc9
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -153,15 +153,16 @@ jobs:
         run: |
           set -euo pipefail
           cd output/android
-          apk="inkui-${TOKEN_MONITOR_RELEASE_TAG#v}-code14-release.apk"
+          apk="inkui-${TOKEN_MONITOR_RELEASE_TAG#v}-code16-release.apk"
           test -f "$apk"
           sha256sum "$apk" > SHA256SUMS
           cat > "$RUNNER_TEMP/inkui-release-notes.md" <<'NOTES'
-          修复墨水屏客户端的 Android 稳定性与恢复流程。
+          修复历史读取的错误恢复与缓存状态，减少无变化刷新时的计算。
 
-          - 界面渲染异常后安全重建，恢复页面、筛选与分页位置。
-          - 原生请求使用总超时、及时取消与进程级并发限制。
-          - 配置或密钥不可读时明确提示，成功测试后才能重新配置。
+          - 历史认证或格式错误后暂停自动重试，统计继续更新；手动刷新可重新读取历史。
+          - 统计确认历史版本未变时清除过期缓存标记，保留原始读取时间。
+          - 当前页面未变化时跳过模型计算和临时布局，保留阅读焦点与排序草稿。
+          - Poke3 已通过 7 项原生检查、真实自动刷新及手动恢复验证。
           - 全部界面、原生与发布检查，以及 Android 10／16 框架测试通过后签名发布。
 
           使用原有长期签名，可覆盖升级并保留配置。安装包最低支持 Android 10；SHA256SUMS 用于校验下载文件。
@@ -174,7 +175,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="$TOKEN_MONITOR_RELEASE_TAG"
-          apk="inkui-${tag#v}-code14-release.apk"
+          apk="inkui-${tag#v}-code16-release.apk"
           assets="$GITHUB_WORKSPACE/output/android"
           remote_assets="$(mktemp -d "$RUNNER_TEMP/inkui-release-XXXXXXXX")"
           trap 'rm -rf -- "$remote_assets"' EXIT

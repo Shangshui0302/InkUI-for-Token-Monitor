@@ -34,8 +34,8 @@ android {
         targetSdk 36
         // Keep the planned release name during development; only new distributed
         // builds advance versionCode. Do not bump SemVer for each UI iteration.
-        versionCode 14
-        versionName '1.0.1'
+        versionCode 16
+        versionName '1.0.2'
         testInstrumentationRunner 'dev.tokenmonitor.eink.EngineeringInstrumentation'
     }
     sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/einkAssets'))

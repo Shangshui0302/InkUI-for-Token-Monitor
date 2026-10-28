@@ -1,5 +1,6 @@
 import { normalizeStats, absoluteTime } from './model.mjs';
 import { dashboardView } from './dashboard-model.mjs';
+import { resetCountdown, dashboardRenderSignature, dashboardViewClock } from './dashboard-render.mjs';
 import { heatLevel } from './theme.mjs';
 import { icon } from './icons.mjs';
 import { trendGeometry } from './charts.mjs';
@@ -15,14 +16,7 @@ const compact = value => !finite(value) ? '—' : Math.abs(value) >= 1e9 ? (valu
 const usd = value => finite(value) ? '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 4 }) : '—';
 const listUsd = value => finite(value) ? '$' + value.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '';
 const known = value => value && !['未知模型', '未知客户端', '未知平台', '未分类', '未命名会话'].includes(value);
-function resetIn(value) {
-  const at = Date.parse(value);
-  if (!Number.isFinite(at)) return '';
-  const minutes = Math.max(0, Math.ceil((at - Date.now()) / 60000));
-  if (!minutes) return '待重置';
-  if (minutes >= 1440) return Math.floor(minutes / 1440) + '天' + (Math.floor(minutes % 1440 / 60) ? Math.floor(minutes % 1440 / 60) + '时' : '') + '后';
-  return minutes >= 60 ? Math.floor(minutes / 60) + '时' + (minutes % 60 ? minutes % 60 + '分' : '') + '后' : minutes + '分后';
-}
+const resetIn = resetCountdown;
 const percentage = value => finite(value) ? (value * 100).toFixed(1) + '%' : '—';
 const states = { running: '运行中', ended: '本轮结束', idle: '未运行' };
 const periods = { today: '今日', month: '本月', allTime: '累计' };
@@ -51,6 +45,7 @@ function historyPairs(row) {
 // Each page is measured before pagination; long fields remain available in drill-downs.
 export function createDashboard(host, onDisplayChange = () => {}) {
   let data = null, context = {}, view = null;
+  let renderedSignature = null, cachedView = null;
   let page = 'limits', period = document.getElementById('period').value || 'today';
   let detailKind = 'usage', runningOnly = false, activityKind = 'trend';
   let providerKey = null, providerPicker = false;
@@ -401,10 +396,12 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     return [['时段', periods[period]], ['总 tokens', count(s.totalTokens)], ['估算 USD', usd(s.costUsd) + (s.costPartial ? ' · 部分费用' : '')], ['运行中', count(view.runningSessions.length)], ['速度 tokens/s', count(s.tokensPerSecond)], ['输出 tokens/s', count(s.outputTokensPerSecond)], ['输入', count(s.inputTokens)], ['输出', count(s.outputTokens)], ['缓存读取', count(s.cacheReadTokens)], ['缓存写入', count(s.cacheWriteTokens)], ['推理', count(s.reasoningTokens)], ['未分类', count(s.unclassifiedTokens)], ['未定价', count(s.unpricedTokens)]];
   }
   function sourcePairs() {
+    view = getView();
     const h = view.history;
     return [['额度汇总时间', absoluteTime(data.stats.limits.updatedAt)], ['额度刷新周期', finite(data.stats.limits.refreshMs) ? count(data.stats.limits.refreshMs / 1000) + ' 秒' : '未提供'], ['用量采集', absoluteTime(data.stats.updatedAt)], ['用量读取', absoluteTime(context.receivedAt)], ['历史', h.source === 'full' ? '完整历史' : h.source === 'preview' ? '近30日预览，空白日期不代表无活动' : '未提供'], ['历史读取', absoluteTime(context.historyReceivedAt) + (context.historyCached ? ' · 缓存' : '')], ['历史错误', context.historyError || '无'], ['会话范围', 'Hub 已提供的会话'], ['会话完整性', view.sessionsUnavailable ? '上游未提供累计会话列表' : view.sessionsIncomplete ? '上游省略部分会话' : '未标记缺省'], ['项目完整性', view.projectsIncomplete ? '上游省略部分项目' : '未标记缺省'], ['费用口径', '按已知模型价格估算 USD；未定价 tokens 不计入费用；— 表示未提供。额度余额保留原币种。'], ['运行状态', '按 Hub 最新观测和最近活动推断；上下文百分比表示已用。已归档或删除的会话不显示活动状态。']];
   }
   function historySummaryPairs() {
+    view = getView();
     const h = view.history.summary;
     return [['历史 tokens', count(h.totalTokens)], ['历史估算 USD', usd(h.totalCost)], ['活跃天数', count(h.activeDays)], ['单日峰值', count(h.peakDayTokens)], ['连续活跃', count(h.currentStreak)], ['最长连续', count(h.longestStreak)], ['消息', count(h.messages)], ['活跃分钟', finite(h.activeTimeMs) ? count(h.activeTimeMs / 60000) : '—'], ['常用模型', h.favoriteModel || '—']];
   }
@@ -448,13 +445,29 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     grouped.slice(0, 3).forEach((item,i)=>{const line=el('span',undefined,'dash-legend-line');const dot=el('i');dot.style.background=shade(i);line.append(dot,el('span',item.name,'dash-name'));legend.append(line);});
     graphic.append(legend); button.append(graphic); surface.append(button);
   }
+  function getView(now = Date.now()) {
+    const clock = dashboardViewClock(data.stats, now);
+    if (!cachedView || cachedView.data !== data || cachedView.period !== period || cachedView.clock !== clock) {
+      cachedView = { data, period, clock, value: dashboardView(data.stats, data.history, period, now) };
+    }
+    return cachedView.value;
+  }
+  function renderState(width, height) {
+    return { page, period, detailKind, runningOnly, activityKind, providerKey, providerPicker,
+      drill, orderEditor, orderFollow, savedOrder, orderSource, index: positions[key()] || 0,
+      width, height, theme: document.documentElement.dataset.theme, accent: document.documentElement.dataset.accent };
+  }
   function render(reason = 'page') {
+    const now = Date.now(), width = host.clientWidth, height = host.clientHeight;
+    const signature = dashboardRenderSignature(data?.stats, data?.history, renderState(width, height), now);
+    // No new nodes, model projection, hidden-tree insertion, or text/layout
+    // measurement for a poll that does not affect this page.
+    if (signature === renderedSignature) return;
     syncNavigation();
     const focused = host.contains(document.activeElement) ? document.activeElement : null;
     host.closest('#app')?.toggleAttribute('data-provider-order', Boolean(orderEditor));
     actions = [];
     const surface = el('div', undefined, 'dash-surface');
-    const width = host.clientWidth, height = host.clientHeight;
     const font = height < 80 ? 8 : width < 280 || height < 150 ? 10 : width < 400 || height < 260 ? 12 : 14;
     const cards = width >= 240 && height >= 150;
     surface.style.setProperty('--dash-font', font + 'px');
@@ -463,7 +476,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     if (orderEditor) { rows = providerOrderRows(surface); layout = 'ordering'; }
     else if (!data) rows = [row('暂无用量快照', '—', '请用刷新按钮读取')];
     else {
-      view = dashboardView(data.stats, data.history, period, Date.now());
+      if (!drill && page !== 'limits') view = getView(now);
       if (drill) {
         const controls = el('div', undefined, 'dash-controls');
         controls.append(actionButton('返回', () => { drill = null; render(); }), el('strong', drill.title, 'dash-caption')); surface.append(controls);
@@ -562,6 +575,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
     }
     updatePager();
     if (!drill && !orderEditor && !providerPicker) readingStore.save(orderSource, readingState());
+    renderedSignature = dashboardRenderSignature(data?.stats, data?.history, renderState(width, height), now);
     if(changed)onDisplayChange(reason);
   }
   function drawTrend(svg, daily, start, end, width, height, offset = 0, font = 12) {
@@ -651,7 +665,7 @@ export function createDashboard(host, onDisplayChange = () => {}) {
       try { const url = new URL(hubUrl); if (['http:', 'https:'].includes(url.protocol)) source = url.origin; } catch (_) { /* Unconfigured Hub. */ }
       if (source === orderSource) return;
       orderSource = source; savedOrder = orderStore.load(source);
-      data = null; drill = null; providerKey = null; providerPicker = false;
+      data = null; cachedView = null; view = null; drill = null; providerKey = null; providerPicker = false;
       orderEditor = null; orderFollow = null; quotaGeometry = null;
       Object.keys(positions).forEach(key => delete positions[key]);
       pendingReading = readingStore.load(source);
@@ -680,6 +694,6 @@ export function createDashboard(host, onDisplayChange = () => {}) {
       else return false;
       render(); return true;
     },
-    clear() { pendingReading = readingState(); data = null; drill = null; providerKey = null; providerPicker = false; orderEditor = null; orderFollow = null; render(); }
+    clear() { pendingReading = readingState(); data = null; cachedView = null; view = null; drill = null; providerKey = null; providerPicker = false; orderEditor = null; orderFollow = null; render(); }
   };
 }
