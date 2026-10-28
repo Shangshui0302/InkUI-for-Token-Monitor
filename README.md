@@ -4,7 +4,7 @@
 
 这是独立开发的非官方客户端，并非 Token Monitor 的完整 fork。账号登录、数据采集与跨设备汇总由你另行运行的 Token Monitor Hub 提供；InkUI 负责读取和展示。
 
-[下载最新 APK](https://github.com/Shangshui0302/InkUI-for-Token-Monitor/releases/latest) · [Android 指南](docs/token-monitor-android.md) · [反馈问题](https://github.com/Shangshui0302/InkUI-for-Token-Monitor/issues)
+[下载最新 APK](https://github.com/Shangshui0302/InkUI-for-Token-Monitor/releases/latest) · [更新日志](docs/token-monitor-android.md#更新日志) · [Android 指南](docs/token-monitor-android.md) · [反馈问题](https://github.com/Shangshui0302/InkUI-for-Token-Monitor/issues)
 
 ## 界面预览
 
